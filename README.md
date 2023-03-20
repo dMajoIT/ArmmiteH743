@@ -1,5 +1,7 @@
 # PicomiteLibraryAdditions
-Files update to implement Library commands
+These files contain the updates required to implement Library commands into the PicoMite
+The files are based on 5.07.07 Beta27.
+Use Winmerge to compare differences with the original source.
 
 
 
@@ -20,7 +22,9 @@ Files update to implement Library commands
 
 
 
-=============================================================================================================================================================
+
+
+===========================================================================================
 PicoMite MMBasic
 
 Geoff Graham, Peter Mather Copyright (c) 2021, All rights reserved.
