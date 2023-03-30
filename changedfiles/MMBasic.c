@@ -2628,6 +2628,8 @@ void error(char *msg, ...) {
     if(MMCharPos > 1) MMPrintString("\r\n");
     if(CurrentLinePtr) {
         tp = p = ProgMemory;
+        if (Option.LIBRARY_FLASH_SIZE==MAX_PROG_SIZE && CurrentLinePtr < LibMemory+MAX_PROG_SIZE)
+           tp = p = LibMemory;
         //if(*CurrentLinePtr != T_NEWLINE && CurrentLinePtr < ProgMemory + MAX_PROG_SIZE) {
         if(*CurrentLinePtr != T_NEWLINE && ((CurrentLinePtr < ProgMemory + MAX_PROG_SIZE) || (Option.LIBRARY_FLASH_SIZE==MAX_PROG_SIZE && CurrentLinePtr < LibMemory+MAX_PROG_SIZE))) {    
             // normally CurrentLinePtr points to a T_NEWLINE token but in this case it does not
@@ -2648,7 +2650,7 @@ void error(char *msg, ...) {
         }
 
        // we now have CurrentLinePtr pointing to the start of the line
-//        dump(CurrentLinePtr, 80);
+       //   dump(CurrentLinePtr, 80);
         llist(tknbuf, CurrentLinePtr);
         p = tknbuf; skipspace(p);
         MMPrintString(MMCharPos > 1 ? "\r\n[" : "[");

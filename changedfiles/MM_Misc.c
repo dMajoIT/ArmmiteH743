@@ -1417,7 +1417,14 @@ void cmd_ireturn(void){
 
             if(*p == '\'' && !InQuote) {                            // found a modern remark char
                 skipline(p);
-                if(*(m-3) == 0x01) {
+                //PIntHC(*(m-3)); PIntHC(*(m-2)); PIntHC(*(m-1)); PIntHC(*(m));
+                //MMPrintString("\r\n");
+                //if(*(m-3) == 0x01) {        //Original condition from Micromites
+                /* Check to see if comment is the first thing on the line or its only preceded by spaces.
+                Spaces have been reduced to a single space so we treat a comment with 1 space before it
+                as a comment line to be omitted.
+                */    
+                if((*(m-1) == 0x01) ||  ((*(m-2) == 0x01) && (*(m-1) == 0x20))){    
                     m = TempPtr;                                    // if the comment was the only thing on the line don't copy the line at all
                     continue;
                 } else
@@ -3487,9 +3494,10 @@ void cmd_poke(void) {
 
 // function to find a CFunction
 // only used by fun_peek() below
-unsigned int GetCFunAddr(int *ip, int i) {
+unsigned int GetCFunAddr(int *ip, int i,unsigned char *offset) {
     while(*ip != 0xffffffff) {
-        if(*ip++ == (unsigned int)(subfun[i]-ProgMemory)) {                      // if we have a match
+        //if(*ip++ == (unsigned int)(subfun[i]-ProgMemory)) {                      // if we have a match
+        if(*ip++ == (unsigned int)(subfun[i]-offset)) {                      // if we have a match
             ip++;                                                   // step over the size word
             i = *ip++;                                              // get the offset
             return (unsigned int)(ip + i);                          // return the entry point
@@ -3584,8 +3592,8 @@ void fun_peek(void) {
         if(i == -1) i = FindSubFun(p, false);                       // and if not found try for a subroutine
         if(i == -1 || !(*subfun[i] == cmdCSUB)) error("Invalid argument");
         // search through program flash and the library looking for a match to the function being called
-        j = GetCFunAddr((int *)CFunctionFlash, i);
-        if(!j) j = GetCFunAddr((int *)CFunctionLibrary, i);         //Check the library
+        j = GetCFunAddr((int *)CFunctionFlash, i,ProgMemory);
+        if(!j) j = GetCFunAddr((int *)CFunctionLibrary, i,LibMemory);         //Check the library
         if(!j) error("Internal fault 6(sorry)");
         iret = (unsigned int)j;                                     // return the entry point
         targ = T_INT;
