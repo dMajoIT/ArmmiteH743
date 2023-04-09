@@ -99,7 +99,8 @@ int ProgramChanged;                                                 // true if t
 struct s_hash hashlist[MAXVARS/2]={0};
 int hashlistpointer=0;
 unsigned char *LibMemory;                                           //This is where the library is stored. At the last flash slot (4)
-unsigned char *ProgMemory;                                          // program memory, this is where the program is stored
+
+unsigned char *ProgMemory;                                                      // program memory, this is where the program is stored
 int PSize;                                                          // the size of the program stored in ProgMemory[]
 
 int NextData;                                                       // used to track the next item to read in DATA & READ stmts
@@ -329,7 +330,7 @@ void __not_in_flash_func(ExecuteProgram)(unsigned char *p) {
             CurrentLinePtr = p;                                     // and pointer to the line for error reporting
             TraceBuff[TraceBuffIndex] = p;                          // used by TRACE LIST
             if(++TraceBuffIndex >= TRACE_BUFF_SIZE) TraceBuffIndex = 0;
-            if(TraceOn && p < ProgMemory + MAX_PROG_SIZE) {
+            if(TraceOn && p > ProgMemory && p < ProgMemory + MAX_PROG_SIZE) {
                 inpbuf[0] = '[';
                 IntToStr(inpbuf + 1, CountLines(p), 10);
                 strcat(inpbuf, "]");
@@ -443,6 +444,7 @@ void  PrepareProgram(int ErrAbort) {
         }   
           hashlabels(ProgMemory,ErrAbort);
           //if(!ErrAbort) return;
+
 #endif
     if(!ErrAbort) return;
 
@@ -1084,11 +1086,6 @@ void  tokenise(int console) {
             } else if((tp2 = checkstring(p, "CAT")) != NULL) {
                     match_i = GetCommandValue("Inc") - C_BASETOKEN;
                     match_p = p = tp2;
-                
-            } else if((tp2 = checkstring(p, "LIBRARY")) != NULL) {
-                    match_i = GetCommandValue("IReturn") - C_BASETOKEN;
-                    match_p = p = tp2;   
-
             } else {
                 // now try for a command in the command table
                 // this works by scanning the entire table looking for the match with the longest command name
@@ -1848,7 +1845,7 @@ unsigned char *__not_in_flash_func(findlabel)(unsigned char *labelptr) {
     label[0] = i - 1;                                               // the length byte
 	hash %= MAXSUBHASH; //scale to size of table
 	if(funtbl[hash].name[0]==0)error("Cannot find label");
-   	while(funtbl[hash].name[0]!=0){
+	while(funtbl[hash].name[0]!=0){
 		//if(funtbl[hash].index>=(uint32_t)ProgMemory){  //Is there a need to test this? Without this we can find labels in the Library
 			tp=funtbl[hash].name;
 			ip=&label[1];
@@ -2650,7 +2647,7 @@ void error(char *msg, ...) {
         }
 
        // we now have CurrentLinePtr pointing to the start of the line
-       //   dump(CurrentLinePtr, 80);
+//        dump(CurrentLinePtr, 80);
         llist(tknbuf, CurrentLinePtr);
         p = tknbuf; skipspace(p);
         MMPrintString(MMCharPos > 1 ? "\r\n[" : "[");
