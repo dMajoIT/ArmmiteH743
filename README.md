@@ -1,6 +1,6 @@
-# PicomiteLibraryAdditions
-These files contain the updates required to implement Library commands into the PicoMite/PicomiteVGA and PicomiteWEB
-The files are based on 5.07.07 Beta29.
+# PicomiteLibraryAdditions   -- TRACE command
+These files contain the updates required make TRACE command aware of LIBRARY.
+The files are based on 5.07.07 RC2.
 Use Winmerge to compare differences with the original source.
 
 
