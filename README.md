@@ -1,7 +1,6 @@
-# PicomiteLibraryAdditions   -- TRACE command
-These files contain the updates required make TRACE command aware of LIBRARY.
-The files are based on 5.07.07 RC2.
-Use Winmerge to compare differences with the original source.
+ArmmiteH7
+
+blah blah
 
 
 
@@ -27,9 +26,9 @@ Use Winmerge to compare differences with the original source.
 
 
 
-==============================================================
 
-PicoMite MMBasic
+
+ArmmiteH7 MMBasic
 
 Geoff Graham, Peter Mather Copyright (c) 2021, All rights reserved.
 
