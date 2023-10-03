@@ -4,7 +4,7 @@ Files to build the Armmite H7 MMBasic running on the STM32H743ZI(2) and STM32H74
 
 The STM32CubeIDE project is directory ArmmiteH743. This should be placed in your STM32CubeIDE workspace. e.g. workspace/ArmmiteH743 and opened and compiled using STM32CubeIDE.  
 A compiled binary version is under the the binaries directory.  
-A user manual for MMBasic on the STM32F407 is under the docs directory.  
+A user manual for MMBasic on the STM32H743 is under the docs directory.  
 
 
 Change list from V5.07.00
