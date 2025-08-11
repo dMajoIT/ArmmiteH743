@@ -35,8 +35,8 @@ ENTRY(Reset_Handler)
 /* Highest address of the user mode stack */
 _estack = 0x20020000;    /* end of RAM */
 /* Generate a link error if heap and stack don't fit into RAM */
-_Min_Heap_Size = 0x100;      /* required amount of heap  */
-_Min_Stack_Size = 0x400; /* required amount of stack */
+_Min_Heap_Size = 0x100;      /* required amount of heap 100 */
+_Min_Stack_Size = 0x6800;    /* required amount of stack - Also adjust STACKLIMIT in configuration.h if this is changed */
 
 /* Specify the memory areas */
 /*FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 2048K*/
@@ -66,7 +66,8 @@ SECTIONS
   /* The program code and other data goes into FLASH */
   .text :
   {
-    . = 0x40000;
+    /*. = 0x40000; */     /* sector 1 is skipped. Was used for Options but could be now used */
+    . = 0x200;            /* sector 1 NOT skipped. Now used for firmware */
     . = ALIGN(4);
     *(.cspace)
     *(.text)           /* .text sections (code) */
