@@ -7,9 +7,9 @@ A compiled binary version is under the the binaries directory.
 A user manual for MMBasic on the STM32H743 is under the docs directory.  
 
 
-Change list from V5.07.00
-V5.08.00b0  
-Added CAN etc
+Change list from V5.07.00   
+V5.08.00b0    
+Added CAN etc  
 
 V5.07.02b1:   
 PAGE changed to GUI PAGE   
