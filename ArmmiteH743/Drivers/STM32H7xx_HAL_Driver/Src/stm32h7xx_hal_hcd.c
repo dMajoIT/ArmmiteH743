@@ -551,7 +551,8 @@ void HAL_HCD_IRQHandler(HCD_HandleTypeDef *hhcd)
     /* Handle Host Port Interrupts */
     if (__HAL_HCD_GET_FLAG(hhcd, USB_OTG_GINTSTS_HPRTINT))
     {
-      HCD_Port_IRQHandler(hhcd);
+    	myDummy=123456; //USBFIX Need to write 123456 before calling HCD_Port_IRQHandler
+    	HCD_Port_IRQHandler(hhcd);
     }
 
     /* Handle Host SOF Interrupt */
@@ -1581,7 +1582,7 @@ static void HCD_Port_IRQHandler(HCD_HandleTypeDef *hhcd)
 #if (USE_HAL_HCD_REGISTER_CALLBACKS == 1U)
       hhcd->ConnectCallback(hhcd);
 #else
-      HAL_HCD_Connect_Callback(hhcd);
+        HAL_HCD_Connect_Callback(hhcd);
 #endif /* USE_HAL_HCD_REGISTER_CALLBACKS */
     }
     hprt0_dup  |= USB_OTG_HPRT_PCDET;
