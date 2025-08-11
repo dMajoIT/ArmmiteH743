@@ -9,7 +9,9 @@ A user manual for MMBasic on the STM32H743 is under the docs directory.
 
 Change list from V5.07.00
 
-
+V5.07.02b1:   
+Fixed CWD$ Command   
+Fixed xxxx   
 
 V5.07.02b0:  
 Initial release of V5.07.02
