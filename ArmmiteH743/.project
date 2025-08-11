@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <projectDescription>
-	<name>ArmmiteH743GitBeta1</name>
+	<name>ArmmiteH743</name>
 	<comment></comment>
 	<projects>
 	</projects>
@@ -26,3 +26,4 @@
 		<nature>com.st.stm32cube.ide.mcu.MCUSW4STM32ConvertedProjectNature</nature>
 	</natures>
 </projectDescription>
+
