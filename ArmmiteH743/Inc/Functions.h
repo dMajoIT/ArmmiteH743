@@ -61,7 +61,8 @@ void fun_abs(void);
 void fun_asc(void);
 void fun_atn(void);
 void fun_atan2(void);
-void fun_base(void);
+//void fun_base(void);
+void fun_bin(void);
 void fun_chr(void);
 void fun_cint(void);
 void fun_cos(void);
@@ -108,6 +109,9 @@ void fun_dummy(void);
 void fun_test(void);
 void fun_bound(void);
 void fun_ternary(void);
+void fun_tilde(void);
+//void fun_byte(void);
+//void fun_bit(void);
 
 void fun_call(void);
 #define RADCONV   (MMFLOAT)57.2957795130823229	  // Used when converting degrees -> radians and vice versa
@@ -148,7 +152,8 @@ void fun_call(void);
 	{ "ASin(",		T_FUN  | T_NBR,			0, fun_asin		},
 	{ "Atn(",		T_FUN  | T_NBR,			0, fun_atn		},
 	{ "Atan2(",		T_FUN  | T_NBR,			0, fun_atan2	},
-	{ "Base$(",		T_FUN  | T_STR,			0, fun_base		},
+//	{ "Base$(",		T_FUN  | T_STR,			0, fun_base		},
+	{ "Bin$(",		T_FUN  | T_STR,			0, fun_bin		},
 	{ "Bound(",		T_FUN  | T_INT,			0, fun_bound	},
 	{ "Chr$(",		T_FUN  | T_STR,			0, fun_chr,		},
 	{ "Choice(",	T_FUN | T_STR | T_INT | T_NBR,		0, fun_ternary	},
@@ -156,12 +161,12 @@ void fun_call(void);
 	{ "Cint(",		T_FUN  | T_INT,			0, fun_cint		},
 	{ "Cos(",		T_FUN  | T_NBR,			0, fun_cos		},
 	{ "Deg(",		T_FUN  | T_NBR,			0, fun_deg		},
-//    { "MM.Errno",   T_FNA  | T_INT,		    0, fun_errno    },
-//    { "MM.ErrMsg$", T_FNA  | T_STR,		    0, fun_errmsg   },
+//  { "MM.Errno",   T_FNA  | T_INT,		    0, fun_errno    },
+//  { "MM.ErrMsg$", T_FNA  | T_STR,		    0, fun_errmsg   },
 	{ "Exp(",		T_FUN  | T_NBR,			0, fun_exp		},
 	{ "Fix(",		T_FUN  | T_INT,			0, fun_fix		},
 	{ "Field$(",    T_FUN  | T_STR,			0, fun_field    },
-//	{ "Hex$(",		T_FUN  | T_STR,			0, fun_hex		},
+	{ "Hex$(",		T_FUN  | T_STR,			0, fun_hex		},
 	{ "Inkey$",		T_FNA  | T_STR,         0, fun_inkey    },
 	{ "Instr(",		T_FUN  | T_INT,			0, fun_instr    },
 	{ "Int(",		T_FUN  | T_INT,			0, fun_int		},
@@ -171,7 +176,7 @@ void fun_call(void);
 	{ "Log(",		T_FUN  | T_NBR,			0, fun_log		},
 	{ "Mid$(",		T_FUN  | T_STR,			0, fun_mid		},
 //	{ "MM.Ver",		T_FNA  | T_NBR,			0, fun_version  },
-//	{ "Oct$(",		T_FUN  | T_STR,			0, fun_oct		},
+	{ "Oct$(",		T_FUN  | T_STR,			0, fun_oct		},
 	{ "Pi",			T_FNA  | T_NBR,			0, fun_pi		},
 	{ "Pos",		T_FNA  | T_INT,         0, fun_pos		},
 	{ "Rad(",		T_FUN  | T_NBR,			0, fun_rad		},
@@ -195,5 +200,6 @@ void fun_call(void);
 	{ "Bin2str$(",  T_FUN  | T_STR,			0, fun_bin2str  },
 	{ "Str2bin(",	T_FUN  | T_NBR | T_INT,	0, fun_str2bin	},
 	{ "Call(",		T_FUN | T_STR | T_INT | T_NBR,		0, fun_call	},
+	{ "~(",	    T_FUN | T_INT | T_NBR | T_STR ,		0, fun_tilde },
 
 #endif

@@ -14,7 +14,7 @@ option) any later version.
 
 // These two together take up about 4K of flash and no one seems to use them !!
 //#define INCLUDE_CRC
-#define INCLUDE_1WIRE_SEARCH
+//#define INCLUDE_1WIRE_SEARCH
 
 /**********************************************************************************
  the C language function associated with commands, functions or operators should be
@@ -26,6 +26,7 @@ void cmd_onewire(void);
 void fun_mmOW(void);
 void fun_ds18b20(void);
 void cmd_ds18b20(void);
+extern int mmOWvalue;
 #if defined(INCLUDE_CRC)
 void fun_owCRC8(void);
 void fun_owCRC16(void);

@@ -86,6 +86,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     extern char IgnorePIN;
     extern char WatchdogSet;
     extern char oc1, oc2, oc3, oc4, oc5, oc6, oc7, oc8, oc9;
+    extern char canopen,canmode;
     extern volatile MMFLOAT VCC;
     extern int PromptFont, PromptFC, PromptBC;                          // the font and colours selected at the prompt;
     extern void TM_USART2_ReceiveHandler(uint8_t c);
@@ -125,13 +126,17 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     	int skip,			/* Number of pre-skip chars (number of ?s) */
     	int inf				/* Infinite search (* specified) */
     );
+
+
+
     // Use the core timer.  The maximum delay is 4 seconds
     void uSec(unsigned int us);
     void shortpause(unsigned int ticks);
     // used to control the processor reset
-    extern unsigned int _excep_dummy;//  __attribute__ ((persistent)); // for some reason persistent does not work on the first variable
+    //extern unsigned int _excep_dummy;//  __attribute__ ((persistent)); // for some reason persistent does not work on the first variable
     extern unsigned int _excep_code;//  __attribute__ ((persistent));  // if there was an exception this is the exception code
-    extern unsigned int _excep_addr;//  __attribute__ ((persistent));  // and this is the address
+    //extern unsigned int _excep_addr;//  __attribute__ ((persistent));  // and this is the address
+    extern unsigned int _restart_reason;//  __attribute__ ((persistent));  // and this is the address
     extern void PRet(void);
     extern void PInt(int64_t n);
     extern void PO(char *s,int m);
@@ -162,6 +167,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     extern uint64_t *clearpage(void *out);
     extern void cleardims(void *vardim);
     extern void clearvar(void *var);
+
+    extern void  setterminal(int height,int width);
 
     #ifdef __DEBUG
         void dump(char *p, int nbr);
@@ -209,6 +216,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define ILI9341		    27
 #define ILI9481IPS      28
 #define ILI9488         29
+#define ST7796S         30
 #define SPI_PANEL_END   30
 
 #define ILI9341_16      31
@@ -260,6 +268,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "SerialFileIO.h"
 #include "PWM.h"
 #include "SPI.h"
+#include "CAN.h"
 #include "Flash.h"
 #include "Xmodem.h"
 #include "Draw.h"

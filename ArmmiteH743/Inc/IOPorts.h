@@ -398,6 +398,16 @@ const struct s_PinDef PinDef100[NBR_PINS_100CHIP + 1]={                         
 #define IRPIN                (HAS_144PINS ? 14  : 93)  //PF4   PB7  EXTI9_5
 #define COUNT5               (HAS_144PINS ? 93  : 0)  //PG8 TIM8_ETR  N/A
 
+//CAN Pins
+#define CAN_1A_RX           (HAS_144PINS ? 114  : 81)  //PD0  PD0
+#define CAN_1A_TX           (HAS_144PINS ? 115  : 82)  //PD1  PD1
+#define CAN_2A_RX           (HAS_144PINS ? 139  : 95)  //PB8  PB8  Also I2C_SCL
+#define CAN_2A_TX           (HAS_144PINS ? 140  : 96)  //PB9  PB9  Also I2C_SDA
+#define CAN_3A_RX           (HAS_144PINS ?  73  : 51)  //PB12 PB12
+#define CAN_3A_TX           (HAS_144PINS ?  74  : 92)  //PB13 PB6
+
+
+
 // I2C pin numbers
 #define P_I2C_SCL           (HAS_144PINS ? 139  : 95)  //PB8
 #define P_I2C_SDA           (HAS_144PINS ? 140  : 96)  //PB9

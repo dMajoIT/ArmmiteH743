@@ -93,6 +93,10 @@ void fun_math(void);
 extern void Q_Mult(MMFLOAT *q1, MMFLOAT *q2, MMFLOAT *n);
 extern void Q_Invert(MMFLOAT *q, MMFLOAT *n);
 
+extern int parsenumberarray( char *tp, MMFLOAT **a1float, int64_t **a1int, int argno, short dimensions, int *dims, bool ConstantNotAllowed);
+extern int parsefloatrarray( char *tp, MMFLOAT **a1float, int argno, int dimensions,int *dims, bool ConstantNotAllowed);
+extern int parseintegerarray(char *tp, int64_t **a1int, int argno, int dimensions, int *dims, bool ConstantNotAllowed);
+extern int parseany( char *tp, MMFLOAT **a1float, int64_t **a1int, unsigned char ** a1str, int *length, bool stringarray);
 
 #define CRC4_DEFAULT_POLYNOME       0x03
 #define CRC4_ITU                    0x03
@@ -147,6 +151,50 @@ extern void Q_Invert(MMFLOAT *q, MMFLOAT *n);
 #define CRC64_ECMA64                0x42F0E1EBA9EA3693
 #define CRC64_ISO64                 0x000000000000001B
 */
+
+typedef struct {
+
+	/* Controller gains */
+	MMFLOAT Kp;
+	MMFLOAT Ki;
+	MMFLOAT Kd;
+
+	/* Derivative low-pass filter time constant */
+	MMFLOAT tau;
+
+	/* Output limits */
+	MMFLOAT limMin;
+	MMFLOAT limMax;
+
+	/* Integrator limits */
+	MMFLOAT limMinInt;
+	MMFLOAT limMaxInt;
+
+	/* Sample time (in seconds) */
+	MMFLOAT T;
+
+	/* Controller "memory" */
+	MMFLOAT integrator;
+	MMFLOAT prevError;			/* Required for integrator */
+	MMFLOAT differentiator;
+	MMFLOAT prevMeasurement;		/* Required for differentiator */
+
+	/* Controller output */
+	MMFLOAT out;
+
+} PIDController;
+
+typedef struct PIDchan {
+	char *interrupt;
+    int process;
+    PIDController *PIDparams;
+    uint64_t timenext;
+    bool active;
+}s_PIDchan;
+extern s_PIDchan PIDchannels[MAXPID+1];
+
+MMFLOAT PIDController_Update(PIDController *pid, MMFLOAT setpoint, MMFLOAT measurement);
+
 
 
 #endif

@@ -45,24 +45,28 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 //#define DEBUGMODE
 
-#define VERSION         "5.07.02b0"
+#define VERSION     "5.08.00b0WithCANandUSBFIX"
 #define MES_SIGNON  "ARMmiteH7 MMBasic Version " VERSION
-#define YEAR		"2011-2023"			    // and the year
-#define YEAR2          "2016-2023"
+#define YEAR		"2011-2025"			    // and the year
+#define YEAR2       "2016-2025"
 #define COPYRIGHT  "\r\nCopyright " YEAR " Geoff Graham\r\nCopyright " YEAR2 " Peter Mather \r\n"
 
 /* Done to test
  *   Math Window and add to manual
  *
+ *   b1 Removes automatic translation of PAGE to GUI PAGE
+ *      fixes GUI PAGE error as well
+ *      fixes cwd$ function.
  *
+ *   b2 Fixed error if ADC trigger set on channel 3  (typo in code)
+ *   b3 Added cmd_sync but not tested yet !!!!!
  */
 /* TODO
+ * BITBANG --> DEVICE as per Picomites
  * LCD --> BITBANG LCD
  * PAGE --> GUI PAGE
  * Restore ERASE command
- * Fun_version check granularity
- * option angle ?? check
- * MM.INFO(EXISTS FILE/DIR cjeck -2 return
+ *
  * C style comments as per picomite
  *
  */

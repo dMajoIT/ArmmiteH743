@@ -47,6 +47,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef CONFIG
 #define CONFIG
 #include <math.h>
+// The MagicKey is used to force all Flash to be erased if new firmware has a different nMagicKey
+#define MagicKey 0x15642903   //Current H7 5.07.02
 // The main clock frequency for the chip at bootup, it can be changed by the CPU command
 #define	CLOCKFREQ		(400000000L)			    // This is set in in Configuration Bits.h
 #define CONSOLE_BAUDRATE    115200
@@ -115,12 +117,44 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define CONFIG_BE		7
 #define MAXKEYBOARDS    5
 #define MAXVARS				1024
+#define MAXVARHASH			MAXVARS/2
 #define MAXHASH				MAXVARS/2-1
+#define MINSTACKSIZE 0x6800   //Set to match _Min_Stack_Size  in STM32H753ZITx_FLASH.ld
+#define STACKLIMIT (0x20020000 - MINSTACKSIZE)  // used to check for stackoverflow
+                                        // 0x20019800 for 6800
+                                        // 0x2001DC00 for 2400	//calculate form link file entries   estack-Min_Stack_Size - 0x100
+                                        // _Min_Stack_Size = 0x2400
+                                        // estack = 0x20020000;    /* end of RAM */
+//#define MAXVARS             512                     // 8 + MAXVARLEN + MAXDIM * 2  (ie, 56 bytes) - these do not incl array members
+
 #define FNV_prime 16777619
 #define FNV_offset_basis 2166136261
 #define MAXRESTORE     16
 #define MAXKEYLEN      64
-
+#define MAXPID 8
+typedef enum {
+    MMHRES,
+    MMVRES,
+    MMVER,
+    MMI2C,
+	MMFONTHEIGHT,
+	MMFONTWIDTH,
+	MMHPOS,
+	MMVPOS,
+	MMONEWIRE,
+    MMERRNO,
+    MMERRMSG,
+	MMWATCHDOG,
+	MMDEVICE,
+	MMCMDLINE,
+   // MMFLAG,
+    MMDISPLAY,
+    MMWIDTH,
+    MMHEIGHT,
+  //  MMPERSISTENT,
+    MMEND
+} Operation;
+extern const char* overlaid_functions[];
 
 #endif
 

@@ -66,6 +66,7 @@ void USART6_IRQHandler(void);
 void OTG_FS_EP1_OUT_IRQHandler(void);
 void OTG_FS_EP1_IN_IRQHandler(void);
 void OTG_FS_IRQHandler(void);
+void EXTI5_10_IRQHandler(void);
 
 #ifdef __cplusplus
 }

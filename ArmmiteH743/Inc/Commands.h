@@ -136,7 +136,7 @@ void cmd_mid(void);
 //	{ "Exit Do",    T_CMD,				0, cmd_exit		},
 	{ "Exit",		T_CMD,				0, cmd_exit		},
 
-//	{ "Erase",		T_CMD,				0, cmd_erase	},
+	{ "Erase",		T_CMD,				0, cmd_erase	},
 	{ "Error",		T_CMD,				0, cmd_error	},
 	{ "For",		T_CMD,				0, cmd_for		},
 	{ "Function",   T_CMD,				0, cmd_subfun	},
@@ -209,6 +209,8 @@ struct s_forstack {
 
 extern struct s_forstack forstack[MAXFORLOOPS + 1] ;
 extern int forindex;
+
+extern  char cmdlinebuff[STRINGSIZE];
 
 struct s_dostack {
     char *evalptr;                          // pointer to the expression to be evaluated

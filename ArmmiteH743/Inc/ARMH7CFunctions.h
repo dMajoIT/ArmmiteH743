@@ -1,7 +1,7 @@
 /*******************************************************************************************
  *
  *  Definitions used when calling MMBasic Interpreter API Functions from CFunctions
- *  For Armmite H7 MMBasic V5.07.01
+ *  For Armmite H7 MMBasic V5.08.00
  *
  *  This file is public domain and may be used without license.
  *
@@ -9,6 +9,7 @@
  *	V1.1 unsigned int magic struct option_s, Interrupt (CSubComplete) added
  *	V1.2 added F1-F9 Keys. USBPolling and noLED to unsigned char for uint8 added CFuncInt3&4
  *	V1.3 added #define MAXKEYLEN
+ *	V1.4 BaseAddress moved to 0x80004a0
  ******************************************************************************************/
 #define MAXVARLEN           32                      // maximum length of a variable name
 #define MAXDIM              5                       // maximum nbr of dimensions to an array
@@ -17,7 +18,8 @@
 
 
 //Addresses in the API Table for the pointers to each function
-#define BaseAddress   0x80402a0 
+//#define BaseAddress   0x80402a0  // Prior to 5.08.00
+#define BaseAddress   0x80004a0    // 5.08.00 and later versions
 #define Vector_uSec               (*(int*)(BaseAddress+0x00))       // void uSec(unsigned int us)
 #define Vector_putConsole         (*(int*)(BaseAddress+0x04))       // void putConsole(int c)
 #define Vector_getConsole         (*(int*)(BaseAddress+0x08))       // int getConsole(void)

@@ -69,6 +69,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	#define FLASH_PROGRAM_ADDR       ADDR_FLASH_SECTOR_0_BANK2   /* Start Basic Program flash area */
     #define FLASH_LIBRARY_ADDR       ADDR_FLASH_SECTOR_3_BANK2   /* Start Library Program flash area */
 	#define FLASH_SAVED_OPTION_ADDR  ADDR_FLASH_SECTOR_5_BANK2   /* Start of Saved Options flash area */
+    //#define FLASH_SAVED_OPTION_ADDR  ADDR_FLASH_SECTOR_1_BANK1   /* Start of Saved Options flash area */
 	#define FLASH_SAVED_VAR_ADDR     ADDR_FLASH_SECTOR_4_BANK2   /* Start of Saved Variables flash area */
 	#define SAVEDVARS_FLASH_SIZE 0x20000  // amount of flash reserved for saved variables
 /* Base address of the Flash sectors */
@@ -88,7 +89,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define LIBRARY_FLASH 3
 
 struct option_s {
-	uint32_t magic;
+	uint32_t Magic;
     char Autorun;
     char Tab;
     char Invert;
@@ -108,7 +109,9 @@ struct option_s {
     unsigned char TOUCH_CS;
     unsigned char TOUCH_IRQ;
     char TOUCH_SWAPXY;
-    char dummyc[3];
+    unsigned char NoScroll;         //NoScroll from picomites added @beta3
+    unsigned char BGR;              //Stores INVERT for LCDs
+    char dummyc[1];
     int  TOUCH_XZERO;
     int  TOUCH_YZERO;
     MMFLOAT TOUCH_XSCALE;

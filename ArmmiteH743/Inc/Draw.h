@@ -83,6 +83,7 @@ void fun_mmhres(void);
 void fun_mmvres(void);
 void fun_mmcharwidth(void);
 void fun_mmcharheight(void);
+void fun_at(void);
 
 #endif
 
@@ -128,10 +129,11 @@ void fun_mmcharheight(void);
 #ifdef INCLUDE_TOKEN_TABLE
 
 	{ "RGB(",           T_FUN | T_INT,		0, fun_rgb	        },
-	{ "MM.HRes",	    T_FNA | T_INT,		0, fun_mmhres 	    },
-	{ "MM.VRes",	    T_FNA | T_INT,		0, fun_mmvres 	    },
+//	{ "MM.HRes",	    T_FNA | T_INT,		0, fun_mmhres 	    },
+//	{ "MM.VRes",	    T_FNA | T_INT,		0, fun_mmvres 	    },
 //	{ "MM.FontWidth",   T_FNA | T_INT,		0, fun_mmcharwidth 	},
 //	{ "MM.FontHeight",  T_FNA | T_INT,		0, fun_mmcharheight },
+	{ "@(",				T_FUN | T_STR,		0, fun_at		},
 #if defined(MX470) || defined(STM32)
  	{ "Pixel(",	        T_FUN | T_INT,		0, fun_pixel,	    },
 	{ "GetScanLine(",	T_FUN | T_INT,		0, fun_getscanline,	},
@@ -211,7 +213,7 @@ void fun_mmcharheight(void);
     
     extern int DisplayHRes, DisplayVRes;        // resolution of the display
     extern int HRes, VRes;                      // the programming charteristics of the display
-
+    extern int PrintPixelMode;
 
 #if defined(MX170)
     #define FONT_BUILTIN_NBR     1

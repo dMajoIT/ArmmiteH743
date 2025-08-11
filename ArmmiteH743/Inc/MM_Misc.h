@@ -151,7 +151,7 @@ void fun_format(void);
 	{ "Peek(",		T_FUN  | T_INT | T_STR | T_NBR,			0, fun_peek		},
 	{ "Time$",	T_FNA | T_STR,		0, fun_time	},
 //	{ "MM.Device$",	T_FNA | T_STR,		0, fun_device   },
-	{ "MM.Watchdog",T_FNA | T_INT,		0, fun_restart	},
+//	{ "MM.Watchdog",T_FNA | T_INT,		0, fun_restart	},
 	{ "Epoch(",		T_FUN  | T_INT,			0, fun_epoch		},
 	{ "DateTime$(",		T_FUN | T_STR,		0, fun_datetime		},
 	{ "MM.Info(",		T_FUN | T_STR | T_INT | T_NBR,		0, fun_info		},

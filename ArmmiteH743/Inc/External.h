@@ -74,10 +74,10 @@ void fun_distance(void);
 void fun_pulsin(void);
 
 void cmd_dht22(void);
-void cmd_bitbang(void);
-#ifdef STM32F4version
-	void cmd_sync(void);
-#endif
+void cmd_device(void);
+
+void cmd_sync(void);
+
 #endif
 
 
@@ -100,10 +100,10 @@ void cmd_bitbang(void);
 	{ "KeyPad",             T_CMD,			0, cmd_keypad       },
 //	{ "DHT22",              T_CMD,			0, cmd_dht22        },
 //	{ "WS2812",              T_CMD,			0, cmd_WS2812        },
-	{ "Bitbang",            T_CMD,			0, cmd_bitbang      },
-#ifdef STM32F4version
+	{ "Device",            T_CMD,			0, cmd_device      },
+
 	{ "SYNC",              T_CMD,			0, cmd_sync        },
-#endif
+
 #endif
 
 
@@ -135,6 +135,8 @@ void cmd_bitbang(void);
 extern char *InterruptReturn;
 extern int check_interrupt(void);
 extern void ClearExternalIO(void);
+
+
 
 
 /****************************************************************************************************************************
@@ -272,6 +274,9 @@ extern char *IrInterrupt;
 void IrInit(void);
 void IrReset(void);
 void IRSendSignal(int pin, int half_cycles);
+
+extern int codemap(char code, int pin);
+extern int codecheck(char *line);
 
 // numpad declares
 extern char *KeypadInterrupt;

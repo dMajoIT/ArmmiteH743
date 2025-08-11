@@ -117,6 +117,7 @@ void fun_baudrate(void);
 	#define COM2_DE       0b010                                         // RS485 enable flag in use
 	extern char com2_mode;                                                     // keeps track of the settings for com1
 	extern unsigned char com2_bit9;                                        // used to track the 9th bit
+
 	// variables for com3
 	extern int com3;														// true if COM3 is enabled
 	extern int com3_buf_size;													// size of the buffer used to receive chars

@@ -86,8 +86,8 @@ void fun_mmvpos(void);
 
 	{ "MsgBox(",        T_FUN | T_INT,              0, fun_msgbox	},
 	{ "CtrlVal(",       T_FUN | T_NBR | T_STR,      0, fun_ctrlval	},
-	{ "MM.HPos",	    T_FNA | T_INT,		0, fun_mmhpos 	},
-	{ "MM.VPos",	    T_FNA | T_INT,		0, fun_mmvpos 	},
+	//{ "MM.HPos",	    T_FNA | T_INT,		0, fun_mmhpos 	},
+	//{ "MM.VPos",	    T_FNA | T_INT,		0, fun_mmvpos 	},
 
 #endif
 

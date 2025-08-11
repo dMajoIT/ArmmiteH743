@@ -94,6 +94,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define HAS_176PINS          (package==0x5)
 #define HAS_208PINS          (package==0x8)
 
+//#define ID_UNIQUE_ADDRESS        0x1FFF7A10  /*!< STM32F4xx address */
+#define ID_UNIQUE_ADDRESS        0x1FF1E800  /*!< STM32H743 address */
+#define TM_ID_GetUnique8(x)      ((x >= 0 && x < 12) ? (*(__IO uint8_t *) (ID_UNIQUE_ADDRESS + (x))) : 0)
+#define TM_ID_GetUnique32(x)     ((x >= 0 && x < 3) ? (*(__IO uint32_t *) (ID_UNIQUE_ADDRESS + 4 * (x))) : 0)
+#define TM_ID_GetUnique64(x)     ((x >= 0 && x < 1) ? (*(__IO uint64_t *) (ID_UNIQUE_ADDRESS + 8 * (x))) : 0)
 //Pins for Bitbanged SPI on the SDCARD on 100Pin DEVEBox and WeAct cards
 #define SD_CLK_Pin GPIO_PIN_12  //pc12  SD_CK
 #define SD_CLK_GPIO_Port GPIOC
@@ -223,6 +228,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define GREEN_LED_Pin GPIO_PIN_0
 #define GREEN_LED_GPIO_Port GPIOB
 
+#define  WakeUp_Pin GPIO_PIN_15
+#define  WakeUp_GPIO_Port GPIOF
+#define  WakeUp_EXTI_IRQn EXTI15_10_IRQn
+
 
 /* ########################## Assert Selection ############################## */
 /**
@@ -255,11 +264,20 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifdef __cplusplus
  extern "C" {
 #endif
-void _Error_Handler(char *, int);
+
+extern int SystemError;
+extern int myDummy;
+//void _Error_Handler(char *, int);
+
+void Error_Handler(void);
+void MMErrorString(char *msg);
 
 void dump(char *p, int nbr,int page);
 
-#define Error_Handler() _Error_Handler(__FILE__, __LINE__)
+//#define Error_Handler() _Error_Handler(__FILE__, __LINE__)
+//#define Error_Handler()  MMPrintString("hello");PRet();
+
+
 #ifdef __cplusplus
 }
 #endif

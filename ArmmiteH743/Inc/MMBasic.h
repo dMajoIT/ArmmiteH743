@@ -112,7 +112,7 @@ extern struct s_vartbl {                               // structure of the varia
     char level;                                 // its subroutine or function level (used to track local variables)
     unsigned char size;                         // the number of chars to allocate for each element in a string array
     char dummy;
-    int __attribute__ ((aligned (4))) dims[MAXDIM];                     // the dimensions. it is an array if the first dimension is NOT zero
+    int __attribute__ ((aligned (4))) dims[MAXDIM];  // the dimensions. it is an array if the first dimension is NOT zero
     union u_val{
         MMFLOAT f;                              // the value if it is a float
         long long int i;                        // the value if it is an integer
@@ -136,9 +136,10 @@ extern int VarIndex;                            // index of the current variable
 extern int LocalIndex;                          // used to track the level of local variables
 extern int emptyarray;
 extern int OptionBase;                          // value of OPTION BASE
-extern char OptionExplicit,OptionEscape;                     // true if OPTION EXPLICIT has been used
+extern char OptionExplicit,OptionEscape;  // true if OPTION EXPLICIT has been used
 extern char DefaultType;                        // the default type if a variable is not specifically typed
 extern char syscheck;
+extern int multi;
 
 //#if !defined(BOOL_ALREADY_DEFINED)
 //    #define BOOL_ALREADY_DEFINED
@@ -269,10 +270,12 @@ void MIPS16 ClearProgram(void);
 void *DoExpression(char *p, int *t);
 char *evaluate(char *p, MMFLOAT *fa, long long int *ia, char **sa, int *ta, int noerror);
 char *doexpr(char *p, MMFLOAT *fa, long long int *ia, char **sa, int *oo, int *t);
+int CheckEmpty(char *p);
 MMFLOAT getnumber(char *p);
 long long int getinteger(char *p);
 //int getint(char *p, int min, int max);
 long long int getint(char *p, long long int min, long long int max);
+
 char *getstring(char *p);
 void MIPS16 tokenise(int console);
 void ExecuteProgram(char *);

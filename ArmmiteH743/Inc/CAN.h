@@ -1,10 +1,12 @@
 /*-*****************************************************************************
 MMBasic for STM32H743 [ZI2 and VIT6] (Armmite H7)
 
-Audio.h
-Handles the PLAY command.
+CAN.h
+
+Include file that contains the globals and defines for SPI in MMBasic.
 
 Copyright 2011-2023 Geoff Graham and  Peter Mather.
+Copyright 2024  Gerry Allardice.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -43,30 +45,23 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 *******************************************************************************/
 
 
-
 /**********************************************************************************
  the C language function associated with commands, functions or operators should be
  declared here
 **********************************************************************************/
 #if !defined(INCLUDE_COMMAND_TABLE) && !defined(INCLUDE_TOKEN_TABLE)
-    void cmd_play(void);
-//    void cmd_tts(void);
-    void CloseAudio(int all);
-    void StopAudio(void);
-    void audioInterrupt(void);
-    void CheckAudio(void);
-    extern volatile int vol_left, vol_right;
+
+void cmd_can(void);
+
+
 #endif
-
-
 
 
 /**********************************************************************************
  All command tokens tokens (eg, PRINT, FOR, etc) should be inserted in this table
 **********************************************************************************/
 #ifdef INCLUDE_COMMAND_TABLE
-	{ "Play",        	T_CMD,				0, cmd_play	    },
-//	{ "TTS",        	T_CMD,				0, cmd_tts	    },
+	{ "CAN",	T_CMD,				0, cmd_can	},
 #endif
 
 
@@ -74,50 +69,50 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  All other tokens (keywords, functions, operators) should be inserted in this table
 **********************************************************************************/
 #ifdef INCLUDE_TOKEN_TABLE
-// the format is:
-//    TEXT      	TYPE                P  FUNCTION TO CALL
-// where type is T_NA, T_FUN, T_FNA or T_OPER augmented by the types T_STR and/or T_NBR
-// and P is the precedence (which is only used for operators)
-
+	//{ "CAN(",	T_FUN | T_INT,		0, fun_can,	},
 #endif
-#if !defined(INCLUDE_COMMAND_TABLE) && !defined(INCLUDE_TOKEN_TABLE)
-// General definitions used by other modules
-
-#ifndef AUDIO_HEADER
-#define AUDIO_HEADER
-typedef enum { P_NOTHING, P_PAUSE_TONE, P_TONE, P_PAUSE_SOUND, P_SOUND, P_WAV, P_PAUSE_WAV, P_FLAC, P_MP3, P_MOD, P_PAUSE_MOD, P_PAUSE_FLAC, P_TTS, P_DAC, P_PAUSE_MP3,P_SYNC} e_CurrentlyPlaying;
-extern volatile e_CurrentlyPlaying CurrentlyPlaying; 
-extern volatile e_CurrentlyPlaying CurrentlyPlayinge;
-extern int PWM_FREQ;
-extern char *sbuff1, *sbuff2;
-extern unsigned char *stress; //numbers from 0 to 8
-extern unsigned char *phonemeLength; //tab40160
-extern unsigned char *phonemeindex;
-extern volatile int playreadcomplete;
-extern volatile uint64_t bcount[3];
-extern unsigned char *phonemeIndexOutput; //tab47296
-extern unsigned char *stressOutput; //tab47365
-extern unsigned char *phonemeLengthOutput; //tab47416
-extern unsigned char speed;
-extern unsigned char pitch;
-extern unsigned char mouth;
-extern unsigned char throat;
-extern unsigned char *pitches; // tab43008
-extern unsigned char *frequency1;
-extern unsigned char *frequency2;
-extern unsigned char *frequency3;
-extern void Audio_Interrupt(void);
-extern unsigned char *amplitude1;
-extern unsigned char *amplitude2;
-extern unsigned char *amplitude3;
-extern volatile int wav_filesize;                                    // head and tail of the ring buffer for com1
-extern int trackplaying, trackstoplay;
 
 
-typedef struct sa_flist {
-    char fn[127];
-} a_flist;
 
-extern unsigned char *sampledConsonantFlag; // tab44800
-#endif
-#endif
+/***********************************************************************************
+ Function prototypes
+***********************************************************************************/
+
+//#ifdef INCLUDE_FUNCTION_DEFINES
+#ifndef CAN_H
+#define CAN_H
+
+void CanInit(void);
+
+#endif /* CAN_H */
+//#endif /* INCLUDE_FUNCTION_DEFINES */
+
+	/* Exported constants --------------------------------------------------------*/
+	/* User can use this section to tailor FDCANx instance used and associated
+	   resources */
+	/* Definition for FDCANx clock resources */
+//	#define FDCANx                      FDCAN1
+//	#define FDCANx_CLK_ENABLE()         __HAL_RCC_FDCAN_CLK_ENABLE()
+//	#define FDCANx_RX_GPIO_CLK_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE()
+//	#define FDCANx_TX_GPIO_CLK_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE()
+
+//	#define FDCANx_FORCE_RESET()   __HAL_RCC_FDCAN_FORCE_RESET()
+//	#define FDCANx_RELEASE_RESET() __HAL_RCC_FDCAN_RELEASE_RESET()
+
+	/* Definition for FDCANx Pins */
+//	#define FDCANx_TX_PIN       GPIO_PIN_12
+//	#define FDCANx_TX_GPIO_PORT GPIOA
+//	#define FDCANx_TX_AF        GPIO_AF9_FDCAN1
+//	#define FDCANx_RX_PIN       GPIO_PIN_11
+//	#define FDCANx_RX_GPIO_PORT GPIOA
+//	#define FDCANx_RX_AF        GPIO_AF9_FDCAN1
+
+	/* Definition for FDCANx's NVIC IRQ and IRQ Handlers */
+//	#define FDCANx_IT0_IRQn   FDCAN1_IT0_IRQn
+//	#define FDCANx_IT1_IRQn   FDCAN1_IT1_IRQn
+//	#define FDCANx_IRQHandler FDCAN1_IRQHandler
+
+	// global variables
+
+
+/************************************************* end of CAN.h *******************/
