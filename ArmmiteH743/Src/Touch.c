@@ -70,16 +70,25 @@ int TOUCH_GETIRQTRIS=0;
 // this is called by the OPTION TOUCH command
 void MIPS16 ConfigTouch(char *p) {
 	int p1,p2,p3;
+	char code;
 	getargs(&p, 5, ",");
     if(!(argc == 3 || argc == 5)) error("Argument count");
 
+	//p1 = getinteger(argv[0]);
+	//p2 = getinteger(argv[2]);
+	if((code=codecheck(argv[0])))argv[0]+=2;
 	p1 = getinteger(argv[0]);
+	if(code)p1=codemap(code, p1);
+	if((code=codecheck(argv[2])))argv[2]+=2;
 	p2 = getinteger(argv[2]);
+	if(code)p2=codemap(code, p2);
     CheckPin(p1, CP_IGNORE_INUSE);
     CheckPin(p2, CP_IGNORE_INUSE);
     
     if(argc == 5) {
+    	if((code=codecheck(argv[4])))argv[4]+=2;
     	p3 = getinteger(argv[4]);
+    	if(code)p3=codemap(code, p3);
         Option.TOUCH_Click = p3;
     }
 
@@ -100,7 +109,7 @@ void MIPS16 InitTouch(void) {
     SetAndReserve(Option.TOUCH_Click, P_OUTPUT, 0, EXT_BOOT_RESERVED); // config the click pin as an output
     OpenSpiChannel();
 
-    GetTouchValue(CMD_PENIRQ_ON);                                      // send the controller the command to turn on PenIRQ
+    GetTouchValue(CMD_PENIRQ_ON);                                     // send the controller the command to turn on PenIRQ
     TOUCH_GETIRQTRIS = 1;
     
     GetTouchAxis(CMD_MEASURE_X);

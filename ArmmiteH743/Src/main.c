@@ -90,6 +90,8 @@ RNG_HandleTypeDef hrng;
 
 RTC_HandleTypeDef hrtc;
 
+FDCAN_HandleTypeDef hfdcan;   //CAN added
+
 SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 SPI_HandleTypeDef hspi3;
@@ -127,16 +129,21 @@ char WatchdogSet = false;
 uint8_t RxBuffer, TxBuffer;
 #define progress  "\rprogress\r\n"
 int MMCharPos;
+int MMPromptPos;
 char LCDAttrib;
+
+
 volatile int MMAbort = false;
 int use_uart;
-unsigned int __attribute__((section(".my_section"))) _excep_dummy; // for some reason persistent does not work on the first variable
+//unsigned int __attribute__((section(".my_section"))) _excep_dummy; // for some reason persistent does not work on the first variable
 unsigned int __attribute__((section(".my_section"))) _excep_code;  //  __attribute__ ((persistent));  // if there was an exception this is the exception code
-unsigned int __attribute__((section(".my_section"))) _excep_addr;  //  __attribute__ ((persistent));  // and this is the address
+//unsigned int __attribute__((section(".my_section"))) _excep_addr;  //  __attribute__ ((persistent));  // and this is the address
+unsigned int __attribute__((section(".my_section"))) _restart_reason;  //  __attribute__ ((persistent));  // and this is the address
 unsigned int __attribute__((section(".my_section"))) _excep_cause;  //  __attribute__ ((persistent));  // and this is the address
 unsigned int __attribute__((section(".my_section"))) _excep_keys;  //  __attribute__ ((persistent));  // and this is the address
 char *InterruptReturn = NULL;
 int BasicRunning = false;
+int BasicReset = 0;
 volatile int keyboardseen=0;
 char ConsoleRxBuf[CONSOLE_RX_BUF_SIZE];
 volatile int ConsoleRxBufHead = 0;
@@ -155,6 +162,12 @@ uint32_t ticks_per_microsecond;
 uint32_t pll1,pll2;
 uint32_t hse_value;
 int executerun=0;   //cmm2
+char canopen=0;	  //CAN has no pins assigned
+char errstring[256]={0};
+int errpos=0;
+int SystemError=0;
+int myDummy=0;  //Used in fix for intermittent USBKeyboard connection
+
 //extern void JumpToBootloader(void);
 
 #define DISPLAY_CLS             1
@@ -241,12 +254,16 @@ void MX_USB_HOST_Process(void);
 static void MX_TIM16_Init(int prescale);
 //backlight
 static void MX_TIM1_Init(void);
+static void MX_FDCAN1_Init(void);   //CAN added
 
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
                                 
 #define MAXKEYLEN           64
 
-char lastcmd[STRINGSIZE*4];                                           // used to store the last command in case it is needed by the EDIT command
+#define CMD_BUFFER_SIZE STRINGSIZE*4
+char lastcmd[CMD_BUFFER_SIZE];            // used to store the last command in case it is needed by the EDIT command
+void InsertLastcmd( char *s);
+
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -644,7 +661,7 @@ int main(void)
        flashled(4,300);
   #endif
 
-  if(Option.magic != 0x15642903) {
+  if(Option.Magic != MagicKey) {
 	   ResetAllFlash(0);              // init the options if this is the very first startup
 	  _excep_code=0;
   }
@@ -726,9 +743,12 @@ if(HAS_144PINS){   //Original NUCLEO STM32H743TI 144 pins and  8MHz external Clo
 	MX_I2C2_Init();
 	MX_SPI5_Init();
 	MX_I2C1_Init();
+	//MX_FDCAN1_Init();
 	if(HAL_GPIO_ReadPin(GPIOC,  GPIO_PIN_13)){
-
+	 //Its an MMBasic Reset
 		ResetAllFlash(0);
+		//_restart_reason=2;
+		BasicReset=13;
 //#ifdef DIAG
      //   flashled(4,200);
 //#endif
@@ -765,7 +785,8 @@ if(HAS_144PINS){   //Original NUCLEO STM32H743TI 144 pins and  8MHz external Clo
 	MX_I2C2_Init();
 	MX_SPI5_Init();  // VIT6 uses SPI2 as the GenSPI for Touch,SDCARD
 	MX_I2C1_Init();
-
+	MX_FDCAN1_Init();
+	//Test for an MMBasic reset by PC13 being high
 	//The K1 PC13 pin needs a PULLDOWN as its floating
 	//PC13 is part of RTC backup domain. Setting as
 	// an input with PULLDOWN seems to need doing twice
@@ -784,7 +805,10 @@ if(HAS_144PINS){   //Original NUCLEO STM32H743TI 144 pins and  8MHz external Clo
 	HAL_Delay(200);
     //test if K1 is pressed
 	if(HAL_GPIO_ReadPin(GPIOC,  GPIO_PIN_13)){
+	  //Its an MMBasic Reset
 	   ResetAllFlash(0);
+	   //_restart_reason=2;
+	   BasicReset=13;
 //#ifdef DIAG
        // flashled(4,200);
 //#endif
@@ -813,7 +837,31 @@ if(HAS_144PINS){   //Original NUCLEO STM32H743TI 144 pins and  8MHz external Clo
    InitFileIO();
    BasicRunning = true;
 }
+//if( !BasicReset && _restart_reason <= 7)_restart_reason=1;          //Button Reset by default
+if( _restart_reason <= 7)_restart_reason=1;          //Button Reset by default
+if( _restart_reason > 7)_restart_reason=0;           //Power Reset
+if( BasicReset)_restart_reason=2;                    //MMBasic reset via PC13 high
+if (_excep_code==RESET_COMMAND)_restart_reason=3;    //Command Restart
+if (_excep_code==WATCHDOG_TIMEOUT)_restart_reason=4; //watchdog Restart
+if (_excep_code==SCREWUP_TIMEOUT)_restart_reason=5;  //command timeout Restart
+if (_excep_code==RESTART_HEAP)_restart_reason=6;     //Heap Restart
 
+
+if(Option.USBKeyboard != NO_KEYBOARD){
+	  if(abs(Option.USBpower)) {
+	    if(HAS_144PINS)SetAndReserve(abs(Option.USBpower), P_OUTPUT, (Option.USBpower>0 ? 1: 0), EXT_BOOT_RESERVED);
+	  }
+	  HAL_Delay(200);
+	  clearrepeat();
+	  MX_USB_HOST_Init();
+	  HID_MenuInit();
+	  i=20;
+	  while(i--){
+			HID_MenuProcess();
+			MX_USB_HOST_Process();
+			HAL_Delay(Option.USBPolling);
+	  }
+}
   _excep_keys=10;
   initConsole();
   HAL_Delay(200);
@@ -825,9 +873,13 @@ if(HAS_144PINS){   //Original NUCLEO STM32H743TI 144 pins and  8MHz external Clo
 #endif
 		  //htim1.Instance->CCR2=1000-50*10;
 		  MMPrintString(MES_SIGNON); //MMPrintString(b);                                 // print sign on message
-		  if(HAS_144PINS) MMPrintString(" (144 pins) RevId ");
-		  if(HAS_100PINS) MMPrintString(" (100 pins) RevId ");
-		  PIntH(HAL_GetREVID());
+		  if(HAS_144PINS) MMPrintString(" (144 pins) Rev ");
+		  if(HAS_100PINS) MMPrintString(" (100 pins) Rev ");
+		  if (HAL_GetREVID()==0x1003){
+			  MMPrintString("Y");
+		  }else{
+			  MMPrintString("V");
+		  }
 		 // MMPrintString(" ");
 		 // PInt(pll1);
 		 // MMPrintString(" ");
@@ -835,9 +887,17 @@ if(HAS_144PINS){   //Original NUCLEO STM32H743TI 144 pins and  8MHz external Clo
 		  MMPrintString(COPYRIGHT);                                   // print copyright message
 		  MMPrintString("\r\n");
 
-		   //PIntH(package);
 
 	  }
+  }
+
+  if (BasicReset){
+    MMPrintString("!!! MMBasic Reset !!!\r\n" );
+    BasicReset=0;
+  }
+
+  if(_excep_code == RESTART_HEAP) {
+ 	  MMPrintString("Error: Heap overrun\r\n");
   }
 
   if(_excep_code == WATCHDOG_TIMEOUT) {
@@ -858,21 +918,7 @@ if(HAS_144PINS){   //Original NUCLEO STM32H743TI 144 pins and  8MHz external Clo
   HAL_NVIC_DisableIRQ(USART2_IRQn);
   HAL_NVIC_DisableIRQ(USART6_IRQn);
   HAL_NVIC_DisableIRQ(UART5_IRQn);
-  if(Option.USBKeyboard != NO_KEYBOARD){
-	  if(abs(Option.USBpower)) {
-	    if(HAS_144PINS)SetAndReserve(abs(Option.USBpower), P_OUTPUT, (Option.USBpower>0 ? 1: 0), EXT_BOOT_RESERVED);
-	  }
-	  HAL_Delay(200);
-	  clearrepeat();
-	  MX_USB_HOST_Init();
-	  HID_MenuInit();
-	  i=20;
-	  while(i--){
-			HID_MenuProcess();
-			MX_USB_HOST_Process();
-			HAL_Delay(Option.USBPolling);
-	  }
-	}
+  //Keyboard was here now at start
   if(setjmp(mark) != 0) {
 	  if(CurrentlyPlaying != P_NOTHING)CloseAudio(1);
       // we got here via a long jump which means an error or CTRL-C or the program wants to exit to the command prompt
@@ -880,12 +926,9 @@ if(HAS_144PINS){   //Original NUCLEO STM32H743TI 144 pins and  8MHz external Clo
       *tknbuf = 0;                                                // we do not want to run whatever is in the token buffer
       //Options are reloaded on an error, so non permanent Options are set to default we need to reset any we really need.
       if((Option.DISPLAY_TYPE > SPI_PANEL && Option.DISPLAY_TYPE != USER) || (Option.DISPLAY_TYPE==SSD1963_4_16)|| (Option.DISPLAY_TYPE==SSD1963_4)){Option.Refresh=1;}
+      memset(inpbuf,0,STRINGSIZE);
 
-#ifdef CMDHISTORY
-       memset(inpbuf,0,STRINGSIZE);
-#endif
   } else {
-//          if(_excep_cause != CAUSE_MMSTARTUP) {
             ClearProgram();
             PrepareProgram(true);
             _excep_cause = CAUSE_MMSTARTUP;
@@ -901,7 +944,6 @@ if(HAS_144PINS){   //Original NUCLEO STM32H743TI 144 pins and  8MHz external Clo
             	 goto autorun;
 
             }
- //       }
   }
 //  SerUSBPutS("\033[?1000l");                         // Tera Term turn off mouse click report in vt200 mode
 
@@ -919,12 +961,12 @@ if(HAS_144PINS){   //Original NUCLEO STM32H743TI 144 pins and  8MHz external Clo
   while (1)
   {
 	 executerun=0;    //cmm2
-goto skip2;
+//goto skip2;
   /* USER CODE END WHILE */
 //    MX_USB_HOST_Process();
 
   /* USER CODE BEGIN 3 */
-skip2:
+//skip2:
 	if(Option.DISPLAY_CONSOLE) {
 		SetFont(PromptFont);
 		gui_fcolour = PromptFC;
@@ -961,17 +1003,14 @@ skip2:
       if(!ErrorInPrompt && FindSubFun("MM.PROMPT", 0) >= 0) {
           ErrorInPrompt = true;
           ExecuteProgram("MM.PROMPT\0");
+          MMPromptPos=MMCharPos-1;    //Save length of prompt
       } else {
           MMPrintString("> ");                                    // print the prompt
+          MMPromptPos=2;    //Save length of prompt
       }
       ErrorInPrompt = false;
-#ifdef CMDHISTORY
-        EditInputLine();          //Enter|Recall|Edit the command line. Save to command history
-#else
-        EditInputLine();
-        InsertLastcmd(inpbuf);                                  // save in case we want to edit it later
-  //      MMgetline(0, inpbuf);                                       // get the input
-#endif
+      EditInputLine();          //Enter|Recall|Edit the command line. Save to command history
+
 
       if(!*inpbuf) continue;                                      // ignore an empty line
 /*	 Old *RUN stuff
@@ -1155,7 +1194,8 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLFRACN = 0;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+    SystemError=1;Error_Handler();
   }
 
     /**Initializes the CPU, AHB and APB busses clocks 
@@ -1173,7 +1213,8 @@ void SystemClock_Config(void)
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+    SystemError=1;Error_Handler();
   }
 
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_RTC|RCC_PERIPHCLK_USART3
@@ -1183,11 +1224,13 @@ void SystemClock_Config(void)
                               |RCC_PERIPHCLK_SPI3|RCC_PERIPHCLK_SPI1
                               |RCC_PERIPHCLK_SPI2|RCC_PERIPHCLK_I2C2
                               |RCC_PERIPHCLK_ADC|RCC_PERIPHCLK_I2C1
-                              |RCC_PERIPHCLK_USB;
+                              |RCC_PERIPHCLK_USB|RCC_PERIPHCLK_FDCAN; //CAN added
   PeriphClkInitStruct.PLL2.PLL2M = 2;
   PeriphClkInitStruct.PLL2.PLL2N = 100;
   PeriphClkInitStruct.PLL2.PLL2P = 2;
-  PeriphClkInitStruct.PLL2.PLL2Q = 8;
+  //PeriphClkInitStruct.PLL2.PLL2Q = 8;  //50MHz
+  PeriphClkInitStruct.PLL2.PLL2Q = 10;  //40MHz
+  //PeriphClkInitStruct.PLL2.PLL2Q = 20;  //20MHz
   PeriphClkInitStruct.PLL2.PLL2R = 8;
   PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_2;
   PeriphClkInitStruct.PLL2.PLL2VCOSEL = RCC_PLL2VCOWIDE;
@@ -1202,6 +1245,7 @@ void SystemClock_Config(void)
   PeriphClkInitStruct.PLL3.PLL3FRACN = 0;
   PeriphClkInitStruct.Spi123ClockSelection = RCC_SPI123CLKSOURCE_PLL2;
   PeriphClkInitStruct.Spi45ClockSelection = RCC_SPI45CLKSOURCE_PLL3;
+  PeriphClkInitStruct.FdcanClockSelection = RCC_FDCANCLKSOURCE_PLL2;   //CAN Added
   PeriphClkInitStruct.Usart234578ClockSelection = RCC_USART234578CLKSOURCE_D2PCLK1;
   PeriphClkInitStruct.Usart16ClockSelection = RCC_USART16CLKSOURCE_D2PCLK2;
   PeriphClkInitStruct.RngClockSelection = RCC_RNGCLKSOURCE_HSI48;
@@ -1211,7 +1255,8 @@ void SystemClock_Config(void)
   PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+    SystemError=1;Error_Handler();
   }
   // enable MCO output (PA_8)
   HAL_RCC_MCOConfig(RCC_MCO1, RCC_MCO1SOURCE_HSI48, RCC_MCODIV_4);
@@ -1311,7 +1356,8 @@ void SystemClock_Config25M(void)
   RCC_OscInitStruct.PLL.PLLFRACN = 0;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+    SystemError=1;Error_Handler();
   }
 
     /**Initializes the CPU, AHB and APB busses clocks
@@ -1332,7 +1378,8 @@ void SystemClock_Config25M(void)
  //if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)  //test
 //  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+    SystemError=1;Error_Handler();
   }
 
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_RTC|RCC_PERIPHCLK_USART3
@@ -1342,11 +1389,13 @@ void SystemClock_Config25M(void)
                               |RCC_PERIPHCLK_SPI3|RCC_PERIPHCLK_SPI1
                               |RCC_PERIPHCLK_SPI2|RCC_PERIPHCLK_I2C2
                               |RCC_PERIPHCLK_ADC|RCC_PERIPHCLK_I2C1
-                              |RCC_PERIPHCLK_USB;
+							  |RCC_PERIPHCLK_USB|RCC_PERIPHCLK_FDCAN; //CAN added
   PeriphClkInitStruct.PLL2.PLL2M = 3;
   PeriphClkInitStruct.PLL2.PLL2N = 96;
   PeriphClkInitStruct.PLL2.PLL2P = 16;
-  PeriphClkInitStruct.PLL2.PLL2Q = 16;
+  //PeriphClkInitStruct.PLL2.PLL2Q = 16;  //50MHz
+  PeriphClkInitStruct.PLL2.PLL2Q = 20;  //40MHz
+  //PeriphClkInitStruct.PLL2.PLL2Q = 40;  //20MHz
   PeriphClkInitStruct.PLL2.PLL2R = 8;
   PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_3;  //_2
   PeriphClkInitStruct.PLL2.PLL2VCOSEL = RCC_PLL2VCOWIDE;
@@ -1362,6 +1411,7 @@ void SystemClock_Config25M(void)
 
   PeriphClkInitStruct.Spi123ClockSelection = RCC_SPI123CLKSOURCE_PLL2;
   PeriphClkInitStruct.Spi45ClockSelection = RCC_SPI45CLKSOURCE_PLL3;
+  PeriphClkInitStruct.FdcanClockSelection = RCC_FDCANCLKSOURCE_PLL2;   //CAN Added
   PeriphClkInitStruct.Usart234578ClockSelection = RCC_USART234578CLKSOURCE_PLL3;
   PeriphClkInitStruct.Usart16ClockSelection = RCC_USART16CLKSOURCE_PLL3;
 
@@ -1377,7 +1427,8 @@ void SystemClock_Config25M(void)
   PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	 SystemError=1;Error_Handler();
   }
 
   HAL_RCC_MCOConfig(RCC_MCO1, RCC_MCO1SOURCE_HSI48, RCC_MCODIV_4);
@@ -1431,7 +1482,8 @@ static void MX_ADC2_Init(void)
   hadc2.Init.OversamplingMode = DISABLE;
   if (HAL_ADC_Init(&hadc2) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
     /**Configure Regular Channel 
@@ -1444,7 +1496,8 @@ static void MX_ADC2_Init(void)
   sConfig.Offset = 0;
   if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
 }
@@ -1474,7 +1527,8 @@ static void MX_ADC3_Init(void)
   hadc3.Init.OversamplingMode = DISABLE;
   if (HAL_ADC_Init(&hadc3) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
     /**Configure Regular Channel 
@@ -1487,7 +1541,8 @@ static void MX_ADC3_Init(void)
   sConfig.Offset = 0;
   if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
 }
@@ -1503,7 +1558,8 @@ static void MX_DAC1_Init(void)
   hdac1.Instance = DAC1;
   if (HAL_DAC_Init(&hdac1) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
     /**DAC channel OUT1 config 
@@ -1515,7 +1571,8 @@ static void MX_DAC1_Init(void)
   sConfig.DAC_UserTrimming = DAC_TRIMMING_FACTORY;
   if (HAL_DAC_ConfigChannel(&hdac1, &sConfig, DAC_CHANNEL_1) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
     /**DAC channel OUT2 config 
@@ -1523,7 +1580,8 @@ static void MX_DAC1_Init(void)
   sConfig.DAC_ConnectOnChipPeripheral = DAC_CHIPCONNECT_ENABLE;
   if (HAL_DAC_ConfigChannel(&hdac1, &sConfig, DAC_CHANNEL_2) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
 }
@@ -1543,21 +1601,24 @@ static void MX_I2C1_Init(void)
   hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
   if (HAL_I2C_Init(&hi2c1) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
     /**Configure Analogue filter 
     */
   if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
     /**Configure Digital filter 
     */
   if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
 }
@@ -1578,21 +1639,24 @@ static void MX_I2C2_Init(void)
   hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
   if (HAL_I2C_Init(&hi2c2) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
     /**Configure Analogue filter 
     */
   if (HAL_I2CEx_ConfigAnalogFilter(&hi2c2, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
     /**Configure Digital filter 
     */
   if (HAL_I2CEx_ConfigDigitalFilter(&hi2c2, 0) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
     /**I2C Enable Fast Mode Plus 
@@ -1609,7 +1673,8 @@ static void MX_RNG_Init(void)
   hrng.Init.ClockErrorDetection = RNG_CED_ENABLE;
   if (HAL_RNG_Init(&hrng) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
 }
@@ -1643,17 +1708,20 @@ static void MX_RTC_Init(void)
   hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
   if (HAL_RTC_Init(&hrtc) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   /* USER CODE BEGIN RTC_Init 2 */
   if (HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN) != HAL_OK)
   {
-  _Error_Handler(__FILE__, __LINE__);
+  //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   if (HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN) != HAL_OK)
   {
-  _Error_Handler(__FILE__, __LINE__);
+  //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 //  RtcGetTime();
   if(sDate.Year<18 || sTime.Hours>23 || sTime.Minutes>59){
@@ -1668,7 +1736,8 @@ static void MX_RTC_Init(void)
   sTime.StoreOperation = RTC_STOREOPERATION_RESET;
   if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   /* USER CODE BEGIN RTC_Init 3 */
 
@@ -1681,7 +1750,8 @@ static void MX_RTC_Init(void)
 
   if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   /* USER CODE BEGIN RTC_Init 4 */
   }
@@ -1693,6 +1763,115 @@ static void MX_RTC_Init(void)
   /* USER CODE END RTC_Init 4 */
 
 }
+
+/**
+  * @brief FDCAN1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_FDCAN1_Init(void)
+{
+
+  /* USER CODE BEGIN FDCAN1_Init 0 */
+
+  /* USER CODE END FDCAN1_Init 0 */
+
+  /* USER CODE BEGIN FDCAN1_Init 1 */
+
+  /* USER CODE END FDCAN1_Init 1 */
+  hfdcan.Instance = FDCAN1;
+  hfdcan.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
+  hfdcan.Init.Mode = FDCAN_MODE_NORMAL;
+  hfdcan.Init.AutoRetransmission = DISABLE;
+  hfdcan.Init.TransmitPause = DISABLE;
+  hfdcan.Init.ProtocolException = DISABLE;
+  hfdcan.Init.NominalPrescaler = 1;
+  hfdcan.Init.NominalSyncJumpWidth = 1;
+  hfdcan.Init.NominalTimeSeg1 = 2;
+  hfdcan.Init.NominalTimeSeg2 = 2;
+  hfdcan.Init.DataPrescaler = 1;
+  hfdcan.Init.DataSyncJumpWidth = 1;
+  hfdcan.Init.DataTimeSeg1 = 1;
+  hfdcan.Init.DataTimeSeg2 = 1;
+  hfdcan.Init.MessageRAMOffset = 0;
+  hfdcan.Init.StdFiltersNbr = 0;
+  hfdcan.Init.ExtFiltersNbr = 0;
+  hfdcan.Init.RxFifo0ElmtsNbr = 0;
+  hfdcan.Init.RxFifo0ElmtSize = FDCAN_DATA_BYTES_8;
+  hfdcan.Init.RxFifo1ElmtsNbr = 0;
+  hfdcan.Init.RxFifo1ElmtSize = FDCAN_DATA_BYTES_8;
+  hfdcan.Init.RxBuffersNbr = 0;
+  hfdcan.Init.RxBufferSize = FDCAN_DATA_BYTES_8;
+  hfdcan.Init.TxEventsNbr = 0;
+  hfdcan.Init.TxBuffersNbr = 0;
+  hfdcan.Init.TxFifoQueueElmtsNbr = 0;
+  hfdcan.Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
+  hfdcan.Init.TxElmtSize = FDCAN_DATA_BYTES_8;
+  if (HAL_FDCAN_Init(&hfdcan) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN FDCAN1_Init 2 */
+
+  /* USER CODE END FDCAN1_Init 2 */
+
+}
+
+#ifdef OLDSTUFF
+/**
+  * @brief FDCAN1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_FDCAN1_Init(void)
+{
+
+  /* USER CODE BEGIN FDCAN1_Init 0 */
+
+  /* USER CODE END FDCAN1_Init 0 */
+
+  /* USER CODE BEGIN FDCAN1_Init 1 */
+
+  /* USER CODE END FDCAN1_Init 1 */
+  hfdcan1.Instance = FDCAN1;
+  hfdcan1.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
+  hfdcan1.Init.Mode = FDCAN_MODE_NORMAL;
+  hfdcan1.Init.AutoRetransmission = DISABLE;
+  hfdcan1.Init.TransmitPause = DISABLE;
+  hfdcan1.Init.ProtocolException = DISABLE;
+  hfdcan1.Init.NominalPrescaler = 1;
+  hfdcan1.Init.NominalSyncJumpWidth = 1;
+  hfdcan1.Init.NominalTimeSeg1 = 2;
+  hfdcan1.Init.NominalTimeSeg2 = 2;
+  hfdcan1.Init.DataPrescaler = 1;
+  hfdcan1.Init.DataSyncJumpWidth = 1;
+  hfdcan1.Init.DataTimeSeg1 = 1;
+  hfdcan1.Init.DataTimeSeg2 = 1;
+  hfdcan1.Init.MessageRAMOffset = 0;
+  hfdcan1.Init.StdFiltersNbr = 1;
+  hfdcan1.Init.ExtFiltersNbr = 1;
+  hfdcan1.Init.RxFifo0ElmtsNbr = 1;
+  hfdcan1.Init.RxFifo0ElmtSize = FDCAN_DATA_BYTES_8;
+  hfdcan1.Init.RxFifo1ElmtsNbr = 1;
+  hfdcan1.Init.RxFifo1ElmtSize = FDCAN_DATA_BYTES_8;
+  hfdcan1.Init.RxBuffersNbr = 0;
+  hfdcan1.Init.RxBufferSize = FDCAN_DATA_BYTES_8;
+  hfdcan1.Init.TxEventsNbr = 0;
+  hfdcan1.Init.TxBuffersNbr = 1;
+  hfdcan1.Init.TxFifoQueueElmtsNbr = 1;
+  hfdcan1.Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
+  hfdcan1.Init.TxElmtSize = FDCAN_DATA_BYTES_8;
+  if (HAL_FDCAN_Init(&hfdcan1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN FDCAN1_Init 2 */
+
+  /* USER CODE END FDCAN1_Init 2 */
+
+}
+
+#endif
 
 /* SPI1 init function */
 static void MX_SPI1_Init(void)
@@ -1723,7 +1902,8 @@ static void MX_SPI1_Init(void)
   hspi1.Init.IOSwap = SPI_IO_SWAP_DISABLE;
   if (HAL_SPI_Init(&hspi1) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
 }
@@ -1758,7 +1938,8 @@ static void MX_SPI2_Init(void)
   hspi2.Init.IOSwap = SPI_IO_SWAP_DISABLE;
   if (HAL_SPI_Init(&hspi2) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
 }
@@ -1793,7 +1974,8 @@ static void MX_SPI3_Init(void)
   hspi3.Init.IOSwap = SPI_IO_SWAP_DISABLE;
   if (HAL_SPI_Init(&hspi3) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
 }
@@ -1829,7 +2011,8 @@ static void MX_SPI5_Init(void)
   GenSPI.Init.IOSwap = SPI_IO_SWAP_DISABLE;
   if (HAL_SPI_Init(&GenSPI) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
 }
@@ -1929,20 +2112,23 @@ static void MX_TIM2_Init(void)
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
   if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
 }
@@ -1963,20 +2149,23 @@ static void MX_TIM3_Init(void)
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
   if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
 }
@@ -1997,25 +2186,29 @@ static void MX_TIM4_Init(void)
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
   if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
@@ -2024,25 +2217,29 @@ static void MX_TIM4_Init(void)
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   sConfigOC.Pulse = 0x6000;
   if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   sConfigOC.Pulse = 0x9000;
   if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   sConfigOC.Pulse = 0xB000;
   if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   HAL_TIM_MspPostInit(&htim4);
@@ -2065,25 +2262,29 @@ static void MX_TIM5_Init(void)
   htim5.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim5) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
   if (HAL_TIM_ConfigClockSource(&htim5, &sClockSourceConfig) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   if (HAL_TIM_PWM_Init(&htim5) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim5, &sMasterConfig) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
@@ -2092,22 +2293,26 @@ static void MX_TIM5_Init(void)
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim5, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   if (HAL_TIM_PWM_ConfigChannel(&htim5, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   if (HAL_TIM_PWM_ConfigChannel(&htim5, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   if (HAL_TIM_PWM_ConfigChannel(&htim5, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   HAL_TIM_MspPostInit(&htim5);
@@ -2130,7 +2335,8 @@ void MX_TIM8_Init(void)
   htim8.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim8) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_ETRMODE2;
@@ -2139,7 +2345,8 @@ void MX_TIM8_Init(void)
   sClockSourceConfig.ClockFilter = 0;
   if (HAL_TIM_ConfigClockSource(&htim8, &sClockSourceConfig) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
@@ -2147,7 +2354,8 @@ void MX_TIM8_Init(void)
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim8, &sMasterConfig) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
 
 }
@@ -2171,19 +2379,23 @@ static void MX_UART5_Init(void)
   huart5.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
   if (HAL_UART_Init(&huart5) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   if (HAL_UARTEx_SetTxFifoThreshold(&huart5, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
   {
-   _Error_Handler(__FILE__, __LINE__);
+  // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   if (HAL_UARTEx_SetRxFifoThreshold(&huart5, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
   {
-   _Error_Handler(__FILE__, __LINE__);
+   //_Error_Handler(__FILE__, __LINE__);
+   SystemError=1;Error_Handler();
   }
   if (HAL_UARTEx_EnableFifoMode(&huart5) != HAL_OK)
   {
-   _Error_Handler(__FILE__, __LINE__);
+   //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   /* USER CODE BEGIN USART5_Init 2 */
 
@@ -2210,19 +2422,23 @@ static void MX_USART1_UART_Init(void)
   huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
   if (HAL_UART_Init(&huart1) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   if (HAL_UARTEx_SetTxFifoThreshold(&huart1, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
   {
-   _Error_Handler(__FILE__, __LINE__);
+   //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   if (HAL_UARTEx_SetRxFifoThreshold(&huart1, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
   {
-   _Error_Handler(__FILE__, __LINE__);
+  // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   if (HAL_UARTEx_EnableFifoMode(&huart1) != HAL_OK)
   {
-   _Error_Handler(__FILE__, __LINE__);
+   //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   /* USER CODE BEGIN USART1_Init 2 */
 
@@ -2254,19 +2470,23 @@ static void MX_USART2_UART_Init(void)
   huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
   if (HAL_RS485Ex_Init(&huart2, UART_DE_POLARITY_HIGH, 0, 0) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   if (HAL_UARTEx_SetTxFifoThreshold(&huart2, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
   {
-   _Error_Handler(__FILE__, __LINE__);
+   //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   if (HAL_UARTEx_SetRxFifoThreshold(&huart2, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
   {
-   _Error_Handler(__FILE__, __LINE__);
+   //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   if (HAL_UARTEx_DisableFifoMode(&huart2) != HAL_OK)
   {
-   _Error_Handler(__FILE__, __LINE__);
+   //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   /* USER CODE BEGIN USART2_Init 2 */
 
@@ -2299,19 +2519,23 @@ static void MX_USART3_UART_Init(void)
   huart3.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
   if (HAL_RS485Ex_Init(&huart3, UART_DE_POLARITY_HIGH, 0, 0) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   if (HAL_UARTEx_SetTxFifoThreshold(&huart3, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
   {
-   _Error_Handler(__FILE__, __LINE__);
+   //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
  }
   if (HAL_UARTEx_SetRxFifoThreshold(&huart3, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
   {
-   _Error_Handler(__FILE__, __LINE__);
+  // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   if (HAL_UARTEx_DisableFifoMode(&huart3) != HAL_OK)
   {
-   _Error_Handler(__FILE__, __LINE__);
+  // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   /* USER CODE BEGIN USART3_Init 2 */
 
@@ -2346,7 +2570,8 @@ static void MX_USART6_UART_Init(void)
   huart6.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
   if (HAL_RS485Ex_Init(&huart6, UART_DE_POLARITY_HIGH, 0, 0) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+    //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   if (HAL_UARTEx_SetTxFifoThreshold(&huart6, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
   {
@@ -2354,11 +2579,13 @@ static void MX_USART6_UART_Init(void)
   }
   if (HAL_UARTEx_SetRxFifoThreshold(&huart6, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
   {
-    _Error_Handler(__FILE__, __LINE__);
+   // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
  }
   if (HAL_UARTEx_DisableFifoMode(&huart6) != HAL_OK)
   {
-   _Error_Handler(__FILE__, __LINE__);
+  // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   /* USER CODE BEGIN USART2_Init 6 */
 
@@ -2438,8 +2665,17 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : SWITCH_Pin PC13  Pin 7 on  both 100 pins and 144 pins*/
   GPIO_InitStruct.Pin = SWITCH_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+ // GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING; //CPUSLEEP
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(SWITCH_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : WakeUp_Pin */
+  /*  Pin 55 aternate wakeup
+   GPIO_InitStruct.Pin = WakeUp_Pin;
+   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+   HAL_GPIO_Init( WakeUp_GPIO_Port, &GPIO_InitStruct);
+ */
 
   /*Configure GPIO pins : COUNT1_Pin COUNT2_Pin COUNT3_Pin COUNT4_Pin 
                            IR_Pin */
@@ -2490,6 +2726,9 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF0_MCO;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
   }
+  /* EXTI interrupt init */
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 3, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 }
 
 /* USER CODE BEGIN 4 */
@@ -2523,11 +2762,11 @@ static void MX_TIM16_Init(int prescale)
 void SerialConsolePutC(int c) {
 #ifdef CMDHISTORY
 	if(c == '\b') {
-				    	if (MMCharPos==1){
+		if (MMCharPos==1){
 
-				    	}else{
-				    		MMCharPos -= 1;
-				    	}
+		}else{
+			MMCharPos -= 1;
+		}
 	}
 #endif
     int empty=(huart3.Instance->ICR & USART_ICR_TCCF) | !(huart3.Instance->CR1 & USART_CR1_TCIE) ;
@@ -2615,12 +2854,19 @@ The vt100 escape code sequences
                         F12         esc [ 2 4 ~
 
                         SHIFT-F3    esc [ 2 5 ~         used in the editor
+                        SHIFT-F4    esc [ 2 6 ~
+                        SHIFT-F5    esc [ 2 8 ~
+                        SHIFT-F6    esc [ 2 9 ~
+                        SHIFT-F7    esc [ 3 1 ~
+                        SHIFT-F8    esc [ 3 2 ~
 
 *****************************************************************************************/
 
 // check if there is a keystroke waiting in the buffer and, if so, return with the char
 // returns -1 if no char waiting
 // the main work is to check for vt100 escape code sequences and map to Maximite codes
+// SHIFT F4-F12 Added as per piciomite 6.00.02B0
+//NB: SHIFT F1, F2, F11, and F12 don't appear to generate anything
 int MMInkey(void) {
     unsigned int c = -1;                                            // default no character
     unsigned int tc = -1;                                           // default no character
@@ -2678,8 +2924,14 @@ int MMInkey(void) {
             if(c == '2') {
                 if(tc =='0' || tc == '1') return F9 + (tc - '0');   // F9 and F10
                 if(tc =='3' || tc == '4') return F11 + (tc - '3');  // F11 and F12
-                if(tc =='5') return F3 + 0x20;                      // SHIFT-F3
+               // if(tc =='5') return F3 + 0x20;                      // SHIFT-F3
+               if(tc =='5' || tc=='6') return F3 + 0x20 + tc-'5';   // SHIFT-F3 and F4
+               if(tc =='8' || tc=='9') return F5 + 0x20 + tc-'8';   // SHIFT-F5 and F6
             }
+            if(c == '3') {
+                if(tc >='1' && tc <= '4') return F7 + 0x20 + (tc - '1');   // SHIFT-F7 to F10
+            }
+            //NB: SHIFT F1, F2,F9,F10, F11 and F12 don't appear to generate anything
         }
         // nothing worked so bomb out
         c1 = '['; c2 = c; c3 = tc; c4 = ttc;
@@ -3002,7 +3254,7 @@ char MMputchar(char c) {
     return c;
 }
 
-#ifdef  CMDHISTORY
+
 // insert a string into the start of the lastcmd buffer.
 // the buffer is a sequence of strings separated by a zero byte.
 // using the up arrow usere can call up the last few commands executed.
@@ -3010,12 +3262,12 @@ void InsertLastcmd( char *s) {
 int i, slen;
     if(strcmp(lastcmd, s) == 0) return;                             // don't duplicate
     slen = strlen(s);
-    if(slen < 1 || slen > STRINGSIZE*4 - 1) return;
+    if(slen < 1 || slen > CMD_BUFFER_SIZE - 1) return;
     slen++;
-    for(i = STRINGSIZE*4 - 1; i >=  slen ; i--)
+    for(i = CMD_BUFFER_SIZE - 1; i >=  slen ; i--)
         lastcmd[i] = lastcmd[i - slen];                             // shift the contents of the buffer up
     strcpy(lastcmd, s);                                             // and insert the new string in the beginning
-    for(i = STRINGSIZE*4 - 1; lastcmd[i]; i--) lastcmd[i] = 0;             // zero the end of the buffer
+    for(i = CMD_BUFFER_SIZE - 1; lastcmd[i]; i--) lastcmd[i] = 0;             // zero the end of the buffer
 }
 
 // Debug display onto LCDPANEL
@@ -3035,7 +3287,7 @@ void EditInputLine(void) {
     char *p = NULL;
     char buf[MAXKEYLEN + 3];
     char goend[10];
-    char linelen[10];
+   // char linelen[10];
     int lastcmd_idx, lastcmd_edit;
     int insert, /*startline,*/ maxchars;
     int CharIndex, BufEdited;
@@ -3043,29 +3295,20 @@ void EditInputLine(void) {
     int l4,l3,l2;
     //maxchars = 2*Option.Width-1;
     maxchars=255; //i.e. 3 lines on Vt100 width 80 -2 characters for prompt.
-   // l2=78;  //  Option.width-2
-   // l3=158; // 2*Option.Width -2
-   // l4=238; // 3*Option.Width -2
-    if(Option.DISPLAY_CONSOLE){
-      l2=SCREENWIDTH-2;
-      l3=2*SCREENWIDTH-2;
-      l4=3*SCREENWIDTH-2;
-    }else{
-      l2=Option.Width -2;
-      l3=2*Option.Width-2;
-      l4=3*Option.Width-2;
-    }
-    // Build "\e[80C" equivalent string for the line length
-    strcpy(goend,"\e[");IntToStr(linelen,l2+2, 10);strcat(goend,linelen); strcat(goend, "C");
+    if(Option.DISPLAY_CONSOLE && Option.Width<=SCREENWIDTH){     //We will always assume the Vt100 is 80 colums if LCD is the console <=80.
+       l2=SCREENWIDTH+1-MMPromptPos;
+       l3=2*SCREENWIDTH+2-MMPromptPos;
+       l4=3*SCREENWIDTH+3-MMPromptPos;
+     }else{                         // otherwise assume the VT100 matches Option.Width
+       l2=Option.Width +1-MMPromptPos;
+       l3=2*Option.Width+2-MMPromptPos;
+       l4=3*Option.Width+3-MMPromptPos;
+     }
 
-    //if(strlen(inpbuf) >= maxchars) {
-       // MMPrintString(inpbuf);
-        //BufEdited = false;
-        //i = strlen(inpbuf);
-        //for(p = inpbuf + i; *p; p++) *p = *(p + 1);                 // remove the char from inpbuf
-       // error("Line is too long to edit 1");
-   // }
-   // startline = MMCharPos - 1;                                                          // save the current cursor position
+     // Build "\e[80C" equivalent string for the line length
+     strcpy(goend,"\e[");IntToStr(&goend[strlen(goend)],l2+MMPromptPos, 10);strcat(goend, "C");
+
+
     MMPrintString(inpbuf);                                                              // display the contents of the input buffer (if any)
     CharIndex = strlen(inpbuf);                                                         // get the current cursor position in the line
     insert = false;
@@ -3097,7 +3340,6 @@ void EditInputLine(void) {
         } else {
             buf[0] = c;
             buf[1] = 0;
-
         }
         do {
             switch(buf[0]) {
@@ -3116,8 +3358,7 @@ void EditInputLine(void) {
                                      for(p = inpbuf + i; *p; p++) *p = *(p + 1);                       // remove the char from inpbuf
 
                                  // Lets put the cursor at the beginning of where the command is displayed.
-#define USEBACKSPACE
-#ifdef USEBACKSPACE
+
                                 // backspace to the beginning of line
                                 //if(j > 0) {
                                 while(j)  {
@@ -3128,22 +3369,6 @@ void EditInputLine(void) {
                                 fflush(stdout);
                                 // MMCharPos=3;CurrentX=2*gui_font_width;
                                 MX470Display(CLEAR_TO_EOS);SerUSBPutS("\033[0J");        //Clear to End Of Screen
-
-
-#else
-                                 CurrentX=0;CurrentY=CurrentY-((CharIndex+1)/Option.Width * gui_font_height);
-                                 if (CharIndex>l4-1)SerUSBPutS("\e[3A");
-                                 else if (CharIndex>l3-1)SerUSBPutS("\e[2A");
-                                 else if(CharIndex>l2-1)SerUSBPutS("\e[1A");
-                                 SerUSBPutS("\r");
-                                 //CurrentX=0;SerUSBPutS("\r");
-                                 MX470Display(CLEAR_TO_EOS);
-                                 SerUSBPutS("\033[0J");
-        				         MMPrintString("> ");
-        				         fflush(stdout);
-
-
-#endif
 
                                  j=0;
                                  while(j < strlen(inpbuf)) {
@@ -3201,7 +3426,7 @@ void EditInputLine(void) {
                         CharIndex++;
                       }
 
-                      insert=false; //right always switches to OVER
+                      //insert=false; //right always switches to OVER
                      break;
 
                 /*********************************************DEL ********************************************************/
@@ -3216,8 +3441,6 @@ void EditInputLine(void) {
                 	           j = strlen(inpbuf);
                 	           // Lets put the cursor at the beginning of where the command is displayed.
 
-
-#ifdef USEBACKSPACE
                                 // backspace to the beginning of line
                                 //if(j > 0) {
                 	            j=CharIndex;
@@ -3229,31 +3452,6 @@ void EditInputLine(void) {
                                 fflush(stdout);
                                 // MMCharPos=3;CurrentX=2*gui_font_width;
                                 MX470Display(CLEAR_TO_EOS);SerUSBPutS("\033[0J");        //Clear to End Of Screen
-
-
-#else
-                                 CurrentX=0;CurrentY=CurrentY-((CharIndex+1)/Option.Width * gui_font_height);
-                                 if (CharIndex>l4-1)SerUSBPutS("\e[3A");
-                                 else if (CharIndex>l3-1)SerUSBPutS("\e[2A");
-                                 else if(CharIndex>l2-1)SerUSBPutS("\e[1A");
-                                 SerUSBPutS("\r");
-                                 //CurrentX=0;SerUSBPutS("\r");
-                                 MX470Display(CLEAR_TO_EOS);
-                                 SerUSBPutS("\033[0J");
-        				         MMPrintString("> ");
-        				         fflush(stdout);
-
-
-                  	          // CurrentX=0;CurrentY=CurrentY-((CharIndex+1)/Option.Width * gui_font_height);
-                  	          // if (CharIndex>l4)SerUSBPutS("\e[3A");
-                  	          // else if (CharIndex>l3)SerUSBPutS("\e[2A");
-                  	          // else if(CharIndex>l2)SerUSBPutS("\e[1A");
-                  	         //  SerUSBPutS("\r");
-                  	         //  MMPrintString("> ");MX470Display(CLEAR_TO_EOS);SerUSBPutS("\033[0J");        //Clear to End Of Screen
-
-
-#endif
-
 
                                j=0;
                                while(j < strlen(inpbuf)) {
@@ -3307,7 +3505,8 @@ void EditInputLine(void) {
                             fflush(stdout);
                             break;
 
-/*            if(c == F2)  tp = "RUN";
+/*
+            if(c == F2)  tp = "RUN";
             if(c == F3)  tp = "LIST";
             if(c == F4)  tp = "EDIT";
             if(c == F10) tp = "AUTOSAVE";
@@ -3374,7 +3573,7 @@ void EditInputLine(void) {
 
                 	            if(lastcmd_edit) {
                                     i = lastcmd_idx + strlen(&lastcmd[lastcmd_idx]) + 1;    // find the next command
-                                    if(lastcmd[i] != 0 && i < STRINGSIZE*4 - 1) lastcmd_idx = i;  // and point to it for the next time around
+                                    if(lastcmd[i] != 0 && i < CMD_BUFFER_SIZE - 1) lastcmd_idx = i;  // and point to it for the next time around
                                 } else
                                     lastcmd_edit = true;
                                 strcpy(inpbuf, &lastcmd[lastcmd_idx]);                      // get the command into the buffer for editing
@@ -3400,44 +3599,26 @@ void EditInputLine(void) {
                 insert_lastcmd:                                                             // goto here if we are just recalling a command from buffer
 
 
-			                   // Lets put the cursor at the beginning of where the command is displayed.
+			                 // Lets put the cursor at the beginning of where the command is displayed.
 
-#ifdef USEBACKSPACE
-                                // backspace to the beginning of line
-                                //if(j > 0) {
-				                j=CharIndex;  //????????????????????????????????
-                                while(j)  {
-                                  // MMputchar('\b');
-                                  if (j==l4 || j==l3 ||j==l2 ){DisplayPutC('\b');SerUSBPutS("\e[1A");SerUSBPutS(goend);}else{ MMputchar('\b');}
-                                  j--;
-                                }
-                                fflush(stdout);
-                                // MMCharPos=3;CurrentX=2*gui_font_width;
-                                MX470Display(CLEAR_TO_EOS);SerUSBPutS("\033[0J");        //Clear to End Of Screen
+                             // backspace to the beginning of line
+                             //if(j > 0) {
+				             j=CharIndex;  //????????????????????????????????
+                             while(j)  {
+                             // MMputchar('\b');
+                             if (j==l4 || j==l3 ||j==l2 ){DisplayPutC('\b');SerUSBPutS("\e[1A");SerUSBPutS(goend);}else{ MMputchar('\b');}
+                               j--;
+                             }
+                             fflush(stdout);
+                             // MMCharPos=3;CurrentX=2*gui_font_width;
+                             MX470Display(CLEAR_TO_EOS);SerUSBPutS("\033[0J");        //Clear to End Of Screen
 
-
-#else
-                                 CurrentX=0;CurrentY=CurrentY-((CharIndex+1)/Option.Width * gui_font_height);
-                                 if (CharIndex>l4-1)SerUSBPutS("\e[3A");
-                                 else if (CharIndex>l3-1)SerUSBPutS("\e[2A");
-                                 else if(CharIndex>l2-1)SerUSBPutS("\e[1A");
-                                 SerUSBPutS("\r");
-                                 //CurrentX=0;SerUSBPutS("\r");
-                                 MX470Display(CLEAR_TO_EOS);
-                                 SerUSBPutS("\033[0J");
-        				         MMPrintString("> ");
-        				         fflush(stdout);
-
-
-#endif
-
-
-				            CharIndex = strlen(inpbuf);
-                            MMPrintString(inpbuf);                                          // display the line
-                            if(CharIndex==l4 || CharIndex==l3 || CharIndex==l2){SerUSBPutS(" ");SerUSBPutS("\b");}
-                            fflush(stdout);
-                            CharIndex = strlen(inpbuf);                                     // get the current cursor position in the line
-                            break;
+				             CharIndex = strlen(inpbuf);
+                             MMPrintString(inpbuf);                                          // display the line
+                             if(CharIndex==l4 || CharIndex==l3 || CharIndex==l2){SerUSBPutS(" ");SerUSBPutS("\b");}
+                             fflush(stdout);
+                             CharIndex = strlen(inpbuf);                                     // get the current cursor position in the line
+                             break;
 
 
                 /********************************************* Other Keys ********************************************************/
@@ -3454,7 +3635,6 @@ void EditInputLine(void) {
                                     for(j = strlen(inpbuf); j > CharIndex; j--){
                                        // MMputchar('\b');
                                         if (j==l4 || j==l3 || j==l2){DisplayPutC('\b');SerUSBPutS("\e[1A");SerUSBPutS(goend);}else{ MMputchar('\b');}
-
                                     }
                                     fflush(stdout);                                   // return the cursor to the right position
 
@@ -3466,6 +3646,23 @@ void EditInputLine(void) {
                                     if(j==l4-1 || j==l3-1 || j==l2-1){SerUSBPutS(" ");SerUSBPutS("\b");}
                                     fflush(stdout);
                                 }
+
+                              /**** Future NOSCROLL
+                                i = CharIndex;
+                                j = strlen((const char *)inpbuf);
+                                // If its going to scroll then clear screen
+
+                                if(Option.NoScroll && Option.DISPLAY_CONSOLE){
+                                   if(CurrentY + 2*gui_font_height >= VRes) {
+                                      ClearScreen(gui_bcolour);CurrentY=0;
+                                      CurrentX = (MMPromptPos-2)*gui_font_width  ;
+                                      DisplayPutC('>');
+                                      DisplayPutC(' ');
+                                      DisplayPutS((char *)inpbuf);                      // display the line
+
+                                    }
+                                }
+                              ****/
 
                             }
                             break;
@@ -3484,243 +3681,6 @@ void EditInputLine(void) {
     ShowCursor(false);
 }
 
-
-#else
-
-// insert a string into the start of the lastcmd buffer.
-// the buffer is a sequence of strings separated by a zero byte.
-// using the up arrow usere can call up the last few commands executed.
-void InsertLastcmd(char *s) {
-int i, slen;
-    if(strcmp(lastcmd, s) == 0) return;                             // don't duplicate
-    slen = strlen(s);
-    if(slen < 1 || slen > STRINGSIZE*4 - 1) return;
-    slen++;
-    for(i = STRINGSIZE*4 - 1; i >=  slen ; i--)
-        lastcmd[i] = lastcmd[i - slen];                             // shift the contents of the buffer up
-    strcpy(lastcmd, s);                                             // and insert the new string in the beginning
-    for(i = STRINGSIZE*4 - 1; lastcmd[i]; i--) lastcmd[i] = 0;             // zero the end of the buffer
-}
-
-void EditInputLine(void) {
-    char *p = NULL;
-    char buf[MAXKEYLEN + 3];
-    int lastcmd_idx, lastcmd_edit;
-    int insert, startline, maxchars;
-    int CharIndex, BufEdited;
-    int c, i, j;
-
-    maxchars = Option.Width;
-    if(strlen(inpbuf) >= maxchars) {
-        MMPrintString(inpbuf);
-        error("Line is too long to edit");
-    }
-    startline = MMCharPos - 1;                                                          // save the current cursor position
-    MMPrintString(inpbuf);                                                              // display the contents of the input buffer (if any)
-    CharIndex = strlen(inpbuf);                                                         // get the current cursor position in the line
-    insert = false;
-//    Cursor = C_STANDARD;
-    lastcmd_edit = lastcmd_idx = 0;
-    BufEdited = false; //(CharIndex != 0);
-    while(1) {
-        c = MMgetchar();
-        if(c == TAB) {
-            strcpy(buf, "        ");
-            switch (Option.Tab) {
-              case 2:
-                buf[2 - (CharIndex % 2)] = 0; break;
-              case 3:
-                buf[3 - (CharIndex % 3)] = 0; break;
-              case 4:
-                buf[4 - (CharIndex % 4)] = 0; break;
-              case 8:
-                buf[8 - (CharIndex % 8)] = 0; break;
-            }
-        } else {
-            buf[0] = c;
-            buf[1] = 0;
-        }
-        do {
-            switch(buf[0]) {
-                case '\r':
-                case '\n':  //if(autoOn && atoi(inpbuf) > 0) autoNext = atoi(inpbuf) + autoIncr;
-                            //if(autoOn && !BufEdited) *inpbuf = 0;
-                            goto saveline;
-                            break;
-
-                case '\b':  if(CharIndex > 0) {
-                                BufEdited = true;
-                                i = CharIndex - 1;
-                                for(p = inpbuf + i; *p; p++) *p = *(p + 1);                 // remove the char from inpbuf
-                                while(CharIndex)  { MMputchar('\b'); CharIndex--; }         // go to the beginning of the line
-                                MMPrintString(inpbuf); MMputchar(' '); MMputchar('\b');     // display the line and erase the last char
-                                for(CharIndex = strlen(inpbuf); CharIndex > i; CharIndex--)
-                                    MMputchar('\b');                                        // return the cursor to the righ position
-                            }
-                            break;
-
-                case CTRLKEY('S'):
-                case LEFT:  if(CharIndex > 0) {
-                                if(CharIndex == strlen(inpbuf)) {
-                                    insert = true;
-      //                              Cursor = C_INSERT;
-                                }
-                                MMputchar('\b');
-                                CharIndex--;
-                            }
-                            break;
-
-                case CTRLKEY('D'):
-                case RIGHT: if(CharIndex < strlen(inpbuf)) {
-                                MMputchar(inpbuf[CharIndex]);
-                                CharIndex++;
-                            }
-                            break;
-
-                case CTRLKEY(']'):
-                case DEL:   if(CharIndex < strlen(inpbuf)) {
-                                BufEdited = true;
-                                i = CharIndex;
-                                for(p = inpbuf + i; *p; p++) *p = *(p + 1);                 // remove the char from inpbuf
-                                while(CharIndex)  { MMputchar('\b'); CharIndex--; }         // go to the beginning of the line
-                                MMPrintString(inpbuf); MMputchar(' '); MMputchar('\b');     // display the line and erase the last char
-                                for(CharIndex = strlen(inpbuf); CharIndex > i; CharIndex--)
-                                    MMputchar('\b');                                        // return the cursor to the right position
-                            }
-                            break;
-
-                case CTRLKEY('N'):
-                case INSERT:insert = !insert;
-//                            Cursor = C_STANDARD + insert;
-                            break;
-
-                case CTRLKEY('U'):
-                case HOME:  if(CharIndex > 0) {
-                                if(CharIndex == strlen(inpbuf)) {
-                                    insert = true;
-//                                    Cursor = C_INSERT;
-                                }
-                                while(CharIndex)  { MMputchar('\b'); CharIndex--; }
-                            }
-                            break;
-
-                case CTRLKEY('K'):
-                case END:   while(CharIndex < strlen(inpbuf))
-                                MMputchar(inpbuf[CharIndex++]);
-                            break;
-
-                case 0x91:
-                     break;
-                case 0x92:
-                    strcpy(&buf[1],"RUN\r\n");
-                    break;
-                case 0x93:
-                    strcpy(&buf[1],"LIST\r\n");
-                    break;
-                case 0x94:
-                    strcpy(&buf[1],"EDIT\r\n");
-                    break;
-                case 0x95:
-                    break;
-                case 0x96:
-                    break;
-                case 0x97:
-                    break;
-                case 0x98:
-                    break;
-                case 0x99:
-                    break;
-                case 0x9a:
-                    strcpy(&buf[1],"AUTOSAVE\r\n");
-                    break;
-                case 0x9b:
-                    strcpy(&buf[1],"XMODEM RECEIVE\r\n");
-                    break;
-                 case 0x9c:
-                    strcpy(&buf[1],"XMODEM SEND\r\n");
-                    break;
-                 case CTRLKEY('E'):
-                case UP:    if(!(BufEdited /*|| autoOn || CurrentLineNbr */)) {
-                                while(CharIndex)  { MMputchar('\b'); CharIndex--; }         // go to the beginning of line
-                                if(lastcmd_edit) {
-                                    i = lastcmd_idx + strlen(&lastcmd[lastcmd_idx]) + 1;    // find the next command
-                                    if(lastcmd[i] != 0 && i < STRINGSIZE*4 - 1) lastcmd_idx = i;  // and point to it for the next time around
-                                } else
-                                    lastcmd_edit = true;
-                                strcpy(inpbuf, &lastcmd[lastcmd_idx]);                      // get the command into the buffer for editing
-                                goto insert_lastcmd;
-                            }
-                            break;
-
-
-                case CTRLKEY('X'):
-                case DOWN:  if(!(BufEdited /*|| autoOn || CurrentLineNbr */)) {
-                                while(CharIndex)  { MMputchar('\b'); CharIndex--; }         // go to the beginning of line
-                                if(lastcmd_idx == 0)
-                                    *inpbuf = lastcmd_edit = 0;
-                                else {
-                                    for(i = lastcmd_idx - 2; i > 0 && lastcmd[i - 1] != 0; i--);// find the start of the previous command
-                                    lastcmd_idx = i;                                        // and point to it for the next time around
-                                    strcpy(inpbuf, &lastcmd[i]);                            // get the command into the buffer for editing
-                                }
-                                goto insert_lastcmd;                                        // gotos are bad, I know, I know
-                            }
-                            break;
-
-                insert_lastcmd:                                                             // goto here if we are just editing a command
-                            if(strlen(inpbuf) + startline >= maxchars) {                    // if the line is too long
-                                while(CharIndex)  { MMputchar('\b'); CharIndex--; }         // go to the start of the line
-                                MMPrintString(inpbuf);                                      // display the offending line
-                                error("Line is too long to edit");
-                            }
-                            MMPrintString(inpbuf);                                          // display the line
-                            CharIndex = strlen(inpbuf);                                     // get the current cursor position in the line
-                            for(i = 1; i <= maxchars - strlen(inpbuf) - startline; i++) {
-                                MMputchar(' ');                                             // erase the rest of the line
-                                CharIndex++;
-                            }
-                            while(CharIndex > strlen(inpbuf)) { MMputchar('\b'); CharIndex--; } // return the cursor to the right position
-                            break;
-
-                default:    if(buf[0] >= ' ' && buf[0] < 0x7f) {
-                                BufEdited = true;                                           // this means that something was typed
-                                i = CharIndex;
-                                j = strlen(inpbuf);
-                                if(insert) {
-                                    if(strlen(inpbuf) >= maxchars - 1) break;               // sorry, line full
-                                    for(p = inpbuf + strlen(inpbuf); j >= CharIndex; p--, j--) *(p + 1) = *p;
-                                    inpbuf[CharIndex] = buf[0];                             // insert the char
-                                    MMPrintString(&inpbuf[CharIndex]);                      // display new part of the line
-                                    CharIndex++;
-                                    for(j = strlen(inpbuf); j > CharIndex; j--)
-                                        MMputchar('\b');                                    // return the cursor to the right position
-                                } else {
-                                    inpbuf[strlen(inpbuf) + 1] = 0;                         // incase we are adding to the end of the string
-                                    inpbuf[CharIndex++] = buf[0];                           // overwrite the char
-                                    MMputchar(buf[0]);                                      // display it
-                                    if(CharIndex + startline >= maxchars) {                 // has the input gone beyond the end of the line?
-                                        MMgetline(0, inpbuf);                               // use the old fashioned way of getting the line
-                                        //if(autoOn && atoi(inpbuf) > 0) autoNext = atoi(inpbuf) + autoIncr;
-                                        goto saveline;
-                                    }
-                                }
-                            }
-                            break;
-            }
-            for(i = 0; i < MAXKEYLEN + 1; i++) buf[i] = buf[i + 1];                             // shuffle down the buffer to get the next char
-        } while(*buf);
-    if(CharIndex == strlen(inpbuf)) {
-        insert = false;
-//        Cursor = C_STANDARD;
-        }
-    }
-
-    saveline:
-//    Cursor = C_STANDARD;
-    MMPrintString("\r\n");
-}
-
-#endif
 /* USER CODE END 4 */
 
 /**
@@ -3729,15 +3689,30 @@ void EditInputLine(void) {
   * @param  line: The line in file as a number.
   * @retval None
   */
-void _Error_Handler(char *file, int line)
+//void _Error_Handler(char *file, int line)
+//{
+  /* USER CODE BEGIN Error_Handler_Debug */
+  /* User can add his own implementation to report the HAL error return state */
+//  while(1)
+//  {
+//  }
+  /* USER CODE END Error_Handler_Debug */
+//}
+void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
-  while(1)
-  {
-  }
+	MMErrorString("Error:");
+    char buf[20];
+    IntToStr(buf, SystemError, 10);
+    MMErrorString(buf);
+    MMErrorString("\r\n");
+    MMPrintString("Error_Handler Called \r\n");
+
+
   /* USER CODE END Error_Handler_Debug */
 }
+
 
 #ifdef  USE_FULL_ASSERT
 /**

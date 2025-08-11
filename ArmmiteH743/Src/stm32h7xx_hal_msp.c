@@ -49,6 +49,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "stm32h7xx_hal.h"
 extern void _Error_Handler(char *, int);
+extern int canopen;
 /* USER CODE BEGIN 0 */
 
 /* Definition for ADCx's Channel */
@@ -251,6 +252,205 @@ void HAL_I2C_MspDeInit(I2C_HandleTypeDef* hi2c)
   }
 
 }
+
+/**
+* @brief FDCAN MSP Initialization
+* This function configures the hardware resources used in this example
+* @param hfdcan: FDCAN handle pointer
+* @retval None
+*/
+/* **************************************************************
+* canopen   HAS_144PINS Pin allocations  FDCANx  Shares pins with
+*           CANL        CANH             Used
+* -------   ---------- ----------------  -------- --------------
+* 1         PD0/114     PD1/115          FDCAN1      -
+* 2         PB8/139     PB9/140          FDCAN1    I2C
+* 3         PB12/73     PB13/74          FDCAN2    COM3
+* 4
+* 5         PA10/102    PA9/101          FDCAN1      -     FDMODE
+* 6         PA10/102    PA9/101          FDCAN1      -     FDMODE with BRS
+* 8         LOOPBACK                     FDCAN2    n/a
+* 9         LOOPBACK                     FDCAN1    n/a
+* **************************************************************
+* canopen   HAS_100PINS Pin allocations  FDCANx  Shares pins with
+*           CANL        CANH             Used
+* -------   ---------- ----------------  -------- --------------
+* 1         PD0/81      PD1/82           FDCAN1    COUNT1/2
+* 2         PB8/95      PB9/96           FDCAN1    I2C
+* 3         PB12/51     PB6/92           FDCAN2    COM3
+* 4
+* 5         PA10/69     PA9/68           FDCAN1    COM1   FDMODE
+* 6         PA10/69     PA9/68           FDCAN1    COM1   FDMODE with BRS
+* 8         LOOPBACK                     FDCAN2    n/a
+* 9         LOOPBACK                     FDCAN1
+**********************************************************************************/
+void HAL_FDCAN_MspInit(FDCAN_HandleTypeDef* hfdcan)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  /* Peripheral clock enable */
+  __HAL_RCC_FDCAN_CLK_ENABLE();
+
+ //if(hfdcan->Instance==FDCAN1)
+ // {
+  /* USER CODE BEGIN FDCAN1_MspInit 0 */
+	// MMPrintString("FDCAN1 \r\n");
+  /* USER CODE END FDCAN1_MspInit 0 */
+	  /* Peripheral clock enable */
+	 // __HAL_RCC_FDCAN_CLK_ENABLE();
+
+   // __HAL_RCC_GPIOD_CLK_ENABLE();
+   if (canopen==1){
+	 //  PD0/114     PD1/115          FDCAN1
+     /**FDCAN1 GPIO Configuration
+     PD0     ------> FDCAN1_RX
+     PD1     ------> FDCAN1_TX
+     */
+     GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1;
+     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+     GPIO_InitStruct.Pull = GPIO_NOPULL;
+     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+     GPIO_InitStruct.Alternate = GPIO_AF9_FDCAN1;
+     HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+	   /* FDCANx RX GPIO pin configuration  */
+	  // GPIO_InitStruct.Pin       = GPIO_PIN_0;
+	  // GPIO_InitStruct.Alternate = GPIO_AF9_FDCAN1;
+	  // HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+	   /* FDCAN1 TX GPIO pin configuration  */
+     //  GPIO_InitStruct.Pin       = GPIO_PIN_1;
+     //  GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
+      // GPIO_InitStruct.Pull      = GPIO_PULLUP;
+      // GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
+      // GPIO_InitStruct.Alternate = GPIO_AF9_FDCAN1;
+      // HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+     // MMPrintString("PINS DONE \r\n");
+   }else if (canopen==2){
+
+	   // RX PB8/139      TX PB9/140           FDCAN1    I2C
+
+	   GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_9;
+	   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+	   GPIO_InitStruct.Pull = GPIO_NOPULL;
+	   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	   GPIO_InitStruct.Alternate = GPIO_AF9_FDCAN1;
+	   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+	   /* FDCANx RX GPIO pin configuration  */
+	  // GPIO_InitStruct.Pin       = GPIO_PIN_10;
+	  // GPIO_InitStruct.Alternate = GPIO_AF9_FDCAN1;
+	  // HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+	   /* FDCAN1 TX GPIO pin configuration  */
+       //GPIO_InitStruct.Pin       = GPIO_PIN_9;
+       //GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
+       //GPIO_InitStruct.Pull      = GPIO_PULLUP;
+       //GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
+       //GPIO_InitStruct.Alternate = GPIO_AF9_FDCAN1;
+       //HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+   }else if (canopen==3 && HAS_144PINS){
+	  // RX PB12/73    TX PB13/74          FDCAN2    COM3
+	   GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_13;
+	   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+	   GPIO_InitStruct.Pull = GPIO_NOPULL;
+	   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	   GPIO_InitStruct.Alternate = GPIO_AF9_FDCAN2;
+	   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+	   /* FDCANx RX GPIO pin configuration  */
+	   //GPIO_InitStruct.Pin       = GPIO_PIN_12;
+	   //GPIO_InitStruct.Alternate = GPIO_AF9_FDCAN2;
+	   //HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+	   /* FDCANx TX GPIO pin configuration  */
+	   //GPIO_InitStruct.Pin       = GPIO_PIN_13;
+	   //GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
+	   //GPIO_InitStruct.Pull      = GPIO_PULLUP;
+	   //GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
+	  // GPIO_InitStruct.Alternate = GPIO_AF9_FDCAN2;
+	  // HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+
+
+   }else if (canopen==3 && HAS_100PINS){
+   	  //  RX PB12/51     TX PB6/92           FDCAN2    COM3
+	   GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_6;
+	   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+	   GPIO_InitStruct.Pull = GPIO_NOPULL;
+	   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	   GPIO_InitStruct.Alternate = GPIO_AF9_FDCAN2;
+	   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+	   /* FDCANx RX GPIO pin configuration  */
+	   //GPIO_InitStruct.Pin       = GPIO_PIN_12;
+	   //GPIO_InitStruct.Alternate = GPIO_AF9_FDCAN1;
+	  // HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+	   /* FDCAN1 TX GPIO pin configuration  */
+       //GPIO_InitStruct.Pin       = GPIO_PIN_6;
+       //GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
+       //GPIO_InitStruct.Pull      = GPIO_PULLUP;
+      //GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
+       //GPIO_InitStruct.Alternate = GPIO_AF9_FDCAN2;
+       //HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+
+   }
+  /* USER CODE BEGIN FDCAN1_MspInit 1 */
+
+  /* USER CODE END FDCAN1_MspInit 1 */
+ // }
+
+}
+
+/**
+* @brief FDCAN MSP De-Initialization
+* This function freeze the hardware resources used in this example
+* @param hfdcan: FDCAN handle pointer
+* @retval None
+*/
+void HAL_FDCAN_MspDeInit(FDCAN_HandleTypeDef* hfdcan)
+{
+  if(hfdcan->Instance==FDCAN1)
+  {
+  /* USER CODE BEGIN FDCAN1_MspDeInit 0 */
+
+  /* USER CODE END FDCAN1_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_FDCAN_CLK_DISABLE();
+   if (canopen==1){
+    /**FDCAN1 GPIO Configuration
+    PD0     ------> FDCAN1_RX
+    PD1     ------> FDCAN1_TX
+    */
+    HAL_GPIO_DeInit(GPIOD, GPIO_PIN_0|GPIO_PIN_1);
+   }
+   if (canopen==2){
+    /**FDCAN1 GPIO Configuration
+    PB8     ------> FDCAN1_RX
+    PB9     ------> FDCAN1_TX
+    */
+    HAL_GPIO_DeInit(GPIOB, GPIO_PIN_8|GPIO_PIN_9);
+   }
+   if (canopen==3 && HAS_144PINS){
+    /**FDCAN2 GPIO Configuration
+    PB12     ------> FDCAN1_RX
+    PPB13     ------> FDCAN1_TX
+    */
+    HAL_GPIO_DeInit(GPIOB, GPIO_PIN_12|GPIO_PIN_13);
+   }
+   if (canopen==3 && HAS_100PINS){
+    /**FDCAN2 GPIO Configuration
+    PB12     ------> FDCAN1_RX
+    PB6     ------> FDCAN1_TX
+    */
+    HAL_GPIO_DeInit(GPIOB, GPIO_PIN_12|GPIO_PIN_6);
+   }
+
+  /* USER CODE BEGIN FDCAN1_MspDeInit 1 */
+
+  /* USER CODE END FDCAN1_MspDeInit 1 */
+  }
+
+}
+
 
 void HAL_RNG_MspInit(RNG_HandleTypeDef* hrng)
 {

@@ -143,7 +143,7 @@ unsigned int mmap[128];
  MMBasic commands
 ************************************************************************************************************************/
 
-
+#ifdef PREPARSE
 void MIPS16 cmd_memory(void) {
 	char *p,*tp,*pp;
 	tp = checkstring(cmdline, "PACK");
@@ -393,6 +393,364 @@ void MIPS16 cmd_memory(void) {
     	memset(to, val, n);
     	return;
     }
+#endif
+    void MIPS16 cmd_memory(void) {
+    	char *p,*tp,*pp;
+        tp = checkstring(cmdline, (char *)"PACK");
+        if(tp){
+            getargs(&tp,7,(char *)",");
+            if(argc!=7)error("Syntax");
+            int i,n=getinteger(argv[4]);
+            if(n<=0)return;
+            int size=getint(argv[6],1,32);
+            if(!(size==1 || size==4 || size==8 || size==16 || size==32))error((char *)"Invalid size");
+            int sourcesize,destinationsize;
+            void *top=NULL;
+            uint64_t *from=NULL;
+            if(CheckEmpty((char *)argv[0])){
+                sourcesize=parseintegerarray(argv[0],(int64_t **)&from, 1,1,NULL,false);
+                if(sourcesize<n)error("Source array too small");
+            } else from=(uint64_t *)GetPokeAddr(argv[0]);
+            if(CheckEmpty((char *)argv[2])){
+                destinationsize=parseintegerarray(argv[2],(int64_t **)&top, 2,1,NULL,true);
+                if(destinationsize*64/size<n)error("Destination array too small");
+            } else top=(void *)GetPokeAddr(argv[2]);
+            if((uint32_t)from % 8)error("Source address not divisible by 8");
+            if(size==1){
+                uint8_t *to=(uint8_t *)top;
+                for(i=0;i<n;i++){
+                    int s= i % 8;
+                    if(s==0)*to=0;
+                    *to |= ((*from++) & 0x1)<<s;
+                    if(s==7)to++;
+               }
+            } else if(size==4){
+                uint8_t *to=(uint8_t *)top;
+                for(i=0;i<n;i++){
+                    if((i & 1) == 0){
+                        *to=(*from++) & 0xF;
+                    } else {
+                        *to |= ((*from++) & 0xF)<<4;
+                        to++;
+                    }
+               }
+            } else if(size==8){
+                uint8_t *to=(uint8_t *)top;
+                while(n--){
+                *to++=(uint8_t)*from++;
+                }
+            } else if(size==16){
+                uint16_t *to=(uint16_t *)top;
+                if((uint32_t)to % 2)error("Destination address not divisible by 2");
+                while(n--){
+                *to++=(uint16_t)*from++;
+                }
+            } else if(size==32){
+                uint32_t *to=(uint32_t *)top;
+                if((uint32_t)to % 4)error("Destination address not divisible by 4");
+                while(n--){
+                *to++=(uint32_t)*from++;
+                }
+            }
+            return;
+        }
+        tp = checkstring(cmdline, ( char *)"PRINT");
+        if(tp){
+            char *fromp=NULL;
+            int sourcesize;
+            int64_t *aint;
+            getargs(&tp,5,( char *)",");
+            if(!(argc==5))error("Syntax");
+    	    if(*argv[0] == '#') argv[0]++;
+    		int fnbr = getint(argv[0],1,MAXOPENFILES);	// get the number
+            int n=getinteger(argv[2]);
+            if(CheckEmpty((char *)argv[4])){
+                sourcesize=parseintegerarray(argv[4],&aint,3,1,NULL,false);
+                if(sourcesize*8<n)error("Source array too small");
+                fromp=(char *)aint;
+            } else {
+                fromp=(char *)GetPeekAddr(argv[4]);
+            }
+            if (FileTable[fnbr].com > MAXCOMPORTS)
+            {
+                FilePutStr(n, fromp, fnbr);
+            }
+            else error("File % not open",fnbr);
+            return;
+        }
+        tp = checkstring(cmdline, (char *)"INPUT");
+        if(tp){
+            char *fromp=NULL;
+            int sourcesize;
+            int64_t *aint;
+            getargs(&tp,5,(char *)",");
+            if(!(argc==5))error("Syntax");
+    	    if(*argv[0] == '#') argv[0]++;
+    		int fnbr = getint(argv[0],1,MAXOPENFILES);	// get the number
+            int n=getinteger(argv[2]);
+            if(CheckEmpty((char *)argv[4])){
+                sourcesize=parseintegerarray(argv[4],&aint,3,1,NULL,false);
+                if(sourcesize*8<n)error("Source array too small");
+                fromp=(char *)aint;
+            } else {
+                fromp=(char *)GetPokeAddr(argv[4]);
+            }
+            if (FileTable[fnbr].com > MAXCOMPORTS)
+            {
+                while(!(MMfeof(fnbr)) && n--) *fromp++=FileGetChar(fnbr);
+                if(n)error("End of file");
+            }
+            else error("File % not open",fnbr);
+            return;
+        }
+        tp = checkstring(cmdline, (char *)"UNPACK");
+        if(tp){
+            getargs(&tp,7,(char *)",");
+            if(argc!=7)error("Syntax");
+            int i,n=getinteger(argv[4]);
+            if(n<=0)return;
+            int size=getint(argv[6],1,32);
+            if(!(size==1 || size==4 || size==8 || size==16 || size==32))error((char *)"Invalid size");
+            int sourcesize,destinationsize;
+            uint64_t *to=NULL;
+            void *fromp=NULL;
+            if(CheckEmpty((char *)argv[0])){
+                sourcesize=parseintegerarray(argv[0],(int64_t **)&fromp, 1,1,NULL,false);
+                if(sourcesize*64/size<n)error("Source array too small");
+            } else {
+                fromp=(void*)GetPokeAddr(argv[0]);
+            }
+            if(CheckEmpty((char *)argv[2])){
+                destinationsize=parseintegerarray(argv[2],(int64_t **)&to, 2,1,NULL,true);
+                if(n>destinationsize)error("Destination array too small");
+            } else to=(uint64_t *)GetPokeAddr(argv[2]);
+            if((uint32_t)to % 8)error("Source address not divisible by 8");
+            if(size==1){
+                uint8_t *from=(uint8_t *)fromp;
+                for(i=0;i<n;i++){
+                    int s= i % 8;
+                    *to++ = ((*from & (1<<s)) ? 1 : 0);
+                    if(s==7)from++;
+               }
+
+            } else if(size==4){
+                uint8_t *from=(uint8_t *)fromp;
+                for(i=0;i<n;i++){
+                    if((i & 1) == 0){
+                        *to++=(*from) & 0xF;
+                    } else {
+                        *to++ = (*from) >> 4;
+                        from++;
+                    }
+               }
+            } else if(size==8){
+                uint8_t *from=(uint8_t *)fromp;
+                while(n--){
+                *to++=(uint64_t)*from++;
+                }
+            } else if(size==16){
+                uint16_t *from=(uint16_t *)fromp;
+                if((uint32_t)from % 2)error("Source address not divisible by 2");
+                while(n--){
+                *to++=(uint64_t)*from++;
+                }
+            } else if(size==32){
+                uint32_t *from=(uint32_t *)fromp;
+                if((uint32_t)from % 4)error("Source address not divisible by 4");
+                while(n--){
+                *to++=(uint64_t)*from++;
+                }
+            }
+            return;
+        }
+        tp = checkstring(cmdline, (char *)"COPY");
+        if(tp){
+        	if((p = checkstring(tp, (char *)"INTEGER"))) {
+        		int stepin=1, stepout=1;
+            	getargs(&p,9,(char *)",");
+            	if(argc<5)error("Syntax");
+            	int n=getinteger(argv[4]);
+            	if(n<=0)return;
+             	uint64_t *from=(uint64_t *)GetPokeAddr(argv[0]);
+             	uint64_t *to=(uint64_t *)GetPokeAddr(argv[2]);
+            	if((uint32_t)from % 8)error("Address not divisible by 8");
+            	if((uint32_t)to % 8)error("Address not divisible by 8");
+            	if(argc>=7 && *argv[6])stepin=getint(argv[6],0,0xFFFF);
+            	if(argc==9)stepout=getint(argv[8],0,0xFFFF);
+            	if(stepin==1 && stepout==1)memmove(to, from, n*8);
+            	else{
+                    if(from<to){
+                        from+=(n-1)*stepin;
+                        to+=(n-1)*stepout;
+                        while(n--){
+                            *to=*from;
+                            to-=stepout;
+                            from-=stepin;
+                        }
+                    } else {
+                        while(n--){
+                            *to=*from;
+                            to+=stepout;
+                            from+=stepin;
+                        }
+                    }
+            	}
+        		return;
+        	}
+        	if((p = checkstring(tp, (char *)"FLOAT"))) {
+        		int stepin=1, stepout=1;
+            	getargs(&p,9,(char *)","); //assume byte
+            	if(argc<5)error("Syntax");
+            	int n=getinteger(argv[4]);
+            	if(n<=0)return;
+            	MMFLOAT *from=(MMFLOAT *)GetPokeAddr(argv[0]);
+            	MMFLOAT *to=(MMFLOAT *)GetPokeAddr(argv[2]);
+            	if((uint32_t)from % 8)error("Address not divisible by 8");
+            	if((uint32_t)to % 8)error("Address not divisible by 8");
+            	if(argc>=7 && *argv[6])stepin=getint(argv[6],0,0xFFFF);
+            	if(argc==9)stepout=getint(argv[8],0,0xFFFF);
+            	if(n<=0)return;
+            	if(stepin==1 && stepout==1)memmove(to, from, n*8);
+            	else{
+                    if(from<to){
+                        from+=(n-1)*stepin;
+                        to+=(n-1)*stepout;
+                        while(n--){
+                            *to=*from;
+                            to-=stepout;
+                            from-=stepin;
+                        }
+                    } else {
+                        while(n--){
+                            *to=*from;
+                            to+=stepout;
+                            from+=stepin;
+                        }
+                    }
+            	}
+        		return;
+        	}
+            getargs(&tp,9,(char *)","); //assume byte
+            if(argc<5)error("Syntax");
+            int stepin=1, stepout=1;
+        	char *from=(char *)GetPeekAddr(argv[0]);
+        	char *to=(char *)GetPokeAddr(argv[2]);
+        	int n=getinteger(argv[4]);
+            if(argc>=7 && *argv[6])stepin=getint(argv[6],0,0xFFFF);
+            if(argc==9)stepout=getint(argv[8],0,0xFFFF);
+            if(n<=0)return;
+        	if(stepin==1 && stepout==1)memmove(to, from, n);
+            else {
+                if(from<to){
+                    from+=(n-1)*stepin;
+                    to+=(n-1)*stepout;
+                    while(n--){
+                        *to=*from;
+                        to-=stepout;
+                        from-=stepin;
+                    }
+                } else {
+                    while(n--){
+                        *to=*from;
+                        to+=stepout;
+                        from+=stepin;
+                    }
+                }
+            }
+        	return;
+        }
+        tp = checkstring(cmdline, (char *)"SET");
+        if(tp){
+        	char *p;
+        	if((p = checkstring(tp, (char *)"BYTE"))) {
+            	getargs(&p,5,(char *)","); //assume byte
+            	if(argc!=5)error("Syntax");
+             	char *to=(char *)GetPokeAddr(argv[0]);
+             	int val=getint(argv[2],0,255);
+            	int n=getinteger(argv[4]);
+            	if(n<=0)return;
+            	memset(to, val, n);
+        		return;
+        	}
+        	if((p = checkstring(tp, (char *)"SHORT"))) {
+            	getargs(&p,5,(char *)","); //assume byte
+            	if(argc!=5)error("Syntax");
+             	short *to=(short *)GetPokeAddr(argv[0]);
+            	if((uint32_t)to % 2)error("Address not divisible by 2");
+            	short *q=to;
+       		    short data=getint(argv[2],0,65535);
+            	int n=getinteger(argv[4]);
+            	if(n<=0)return;
+            	while(n>0){
+                    *q++=data;
+                    n--;
+            	}
+        		return;
+        	}
+        	if((p = checkstring(tp, (char *)"WORD"))) {
+            	getargs(&p,5,(char *)","); //assume byte
+            	if(argc!=5)error("Syntax");
+             	unsigned int *to=(unsigned int *)GetPokeAddr(argv[0]);
+            	if((uint32_t)to % 4)error("Address not divisible by 4");
+            	unsigned int *q=to;
+       		    unsigned int data=getint(argv[2],0,0xFFFFFFFF);
+            	int n=getinteger(argv[4]);
+            	if(n<=0)return;
+            	while(n>0){
+                    *q++=data;
+                    n--;
+            	}
+        		return;
+         	}
+        	if((p = checkstring(tp, (char *)"INTEGER"))) {
+        		int stepin=1;
+            	getargs(&p,7,(char *)",");
+            	if(argc<5)error("Syntax");
+             	uint64_t *to=(uint64_t *)GetPokeAddr(argv[0]);
+            	if((uint32_t)to % 8)error("Address not divisible by 8");
+            	int64_t data;
+        		data=getinteger(argv[2]);
+            	int n=getinteger(argv[4]);
+            	if(argc==7)stepin=getint(argv[6],0,0xFFFF);
+            	if(n<=0)return;
+            	if(stepin==1)while(n--)*to++=data;
+            	else{
+                	while(n--){
+                		*to=data;
+                		to+=stepin;
+                	}
+            	}
+        		return;
+        	}
+        	if((p = checkstring(tp, (char *)"FLOAT"))) {
+        		int stepin=1;
+            	getargs(&p,7,(char *)","); //assume byte
+            	if(argc<5)error("Syntax");
+            	MMFLOAT *to=(MMFLOAT *)GetPokeAddr(argv[0]);
+            	if((uint32_t)to % 8)error("Address not divisible by 8");
+            	MMFLOAT data;
+        		data=getnumber(argv[2]);
+            	int n=getinteger(argv[4]);
+               	if(argc==7)stepin=getint(argv[6],0,0xFFFF);
+            	if(n<=0)return;
+            	if(stepin==1)while(n--)*to++=data;
+            	else{
+                	while(n--){
+                		*to=data;
+                		to+=stepin;
+                	}
+            	}
+        		return;
+        	}
+        	getargs(&tp,5,(char *)","); //assume byte
+        	if(argc!=5)error("Syntax");
+         	char *to=(char *)GetPokeAddr(argv[0]);
+         	int val=getint(argv[2],0,255);
+        	int n=getinteger(argv[4]);
+        	if(n<=0)return;
+        	memset(to, val, n);
+        	return;
+        }
     //-----------Output of memory command-------------
     //-------------------------------------------------
     int i, j,k, var, nbr, vsize, VarCnt;
@@ -438,10 +796,12 @@ void MIPS16 cmd_memory(void) {
         unsigned char type, array;
         SavedVarCnt++;
         type = *p++;
-        array = type & 0x80;  type &= 0x7f;                         // set array to true if it is an array
+       // array = type & 0x80;  type &= 0x7f;                         // set array to true if it is an array
+        array = type & 0x80;  type &= 0x0f;                         // set array to true if it is an array
+       // PIntH(type);PRet();
         if(!(type==T_INT || type==T_STR || type==T_NBR)){
-        	ClearSavedVars(1);
-        	SavedVarCnt=0;
+         	ClearSavedVars(1);
+         	SavedVarCnt=0;
         	break;
         }
         p += strlen(p) + 1;
@@ -694,6 +1054,44 @@ void m_alloc(int size) {
 }
 
 
+// from F4 Version
+// test the stack for overflow STACKLIMIT based on MAP file
+// this will probably be caused by a fault within MMBasic but it could also be
+// caused by a very complex BASIC expression
+static void inline __attribute__((always_inline)) TestStackOverflow(void) {
+	unsigned int currstack=__get_MSP();
+	//PIntH(currstack);PRet();
+	if(currstack < (unsigned int)STACKLIMIT){
+		error("Expression is too complex");
+	}
+}
+
+
+// Performance enhancement from Picomites.
+void *GetSystemMemory(int size) { //get memory from the bottom up
+    int n=0, k;
+    unsigned char *addr;
+    TestStackOverflow();
+    k= (size + RAMPAGESIZE - 1)/RAMPAGESIZE;                         // nbr of pages rounded up
+    for(addr = (unsigned char *)RAMBase; addr < (unsigned char *)RAMEND - RAMPAGESIZE; addr += RAMPAGESIZE) {
+        if(!(MBitsGet(addr) & PUSED)) {
+            if(++n == k) {                                          // found a free slot
+                k--;
+                MBitsSet(addr , PUSED | PLAST);     // show that this is used and the last in the chain of pages
+                  while(k--){
+                    addr-=RAMPAGESIZE;
+                    MBitsSet(addr,PUSED);
+                  }
+                mymemset(addr , 0, size);                              // zero the memory
+                return (void *)addr;
+            }
+        } else n = 0;                                               // not enough space here so reset our count
+    }
+    LocalIndex = 0;                                                  // Allows ClearTempMemory to clear all levels
+    ClearTempMemory();                                               // hopefully this will give us enough to print the prompt
+    error("Not enough Heap memory");
+    return NULL;                                                    // keep the compiler happy
+}
 
 // get some memory from the heap
 void *GetMemory(size_t msize) {
@@ -709,7 +1107,8 @@ void *GetMemory(size_t msize) {
 void *GetTempMemory(int NbrBytes) {
     if(StrTmpIndex >= MAXTEMPSTRINGS) error("Not enough memory");
     StrTmpLocalIndex[StrTmpIndex] = LocalIndex;
-    StrTmp[StrTmpIndex] = GetMemory(NbrBytes);
+   // StrTmp[StrTmpIndex] = GetMemory(NbrBytes);
+    StrTmp[StrTmpIndex] = GetSystemMemory(NbrBytes);
     TempMemoryIsChanged = true;
     return (void *)StrTmp[StrTmpIndex++];
 }
@@ -779,32 +1178,21 @@ void FreeMemory(void *addr) {
         addr += RAMPAGESIZE;
     } while(bits != (PUSED | PLAST));
 }
+
 void FreeMemorySafe(void **addr){
 	if(*addr!=NULL){
         if(*addr >= (void *)RAMBASE && *addr < (void *)RAMEND) {FreeMemory(*addr);*addr=NULL;}
 	}
 }
 
-
-
-// test the stack for overflow
-// this will probably be caused by a fault within MMBasic but it could also be
-// caused by a very complex BASIC expression
-void TestStackOverflow(void) {
-	static unsigned int currstack,lowstack=0x10010000;
-	currstack=__get_MSP();
-	if(currstack<lowstack){
-		lowstack=currstack;
-//		PIntH(currstack);MMPrintString("\r\n");
-	}
-#ifdef STM32Version
-	if(currstack < (unsigned int)0x1000b000){
-#else
-	if(currstack < (unsigned int)0x10008800){
-#endif
-		error("Expression is too complex");
+/*
+void FreeMemorySafe(void **addr){
+	if(*addr!=NULL){
+        FreeMemory(*addr);
+        *addr=NULL;
 	}
 }
+*/
 
 
 
@@ -908,7 +1296,7 @@ void *getheap(int size) {
             n = j;                                                  // not enough space here so reset our count
     }
     // out of memory
-    LocalIndex = 0;
+    LocalIndex = 0;                                                 // Allows ClearTempMemory to clear all levels
     ClearTempMemory();                                              // hopefully this will give us enough to print the prompt
     error("Not enough memory");
     return NULL;                                                    // keep the compiler happy

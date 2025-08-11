@@ -774,7 +774,7 @@ void cmd_gui(void) {
 void cmd_GUIpage(char *p) {
     int i, r, OldPages;
 
-    getargs(&cmdline, MAX_ARG_COUNT, ",");
+    getargs(&p, MAX_ARG_COUNT, ",");
     if(!(argc & 1)) error("Argument count");
     OldPages = CurrentPages;
     CurrentPages = 0;

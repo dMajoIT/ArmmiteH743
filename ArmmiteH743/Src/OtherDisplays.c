@@ -52,6 +52,7 @@ int memswitch;
 int memswitch2;
 int displayoffset=0;
 
+
 #define SPIqueue3(a) {HAL_SPI_Transmit(&GenSPI,a,3,500);}
 
 /* transfer state */
@@ -216,7 +217,9 @@ void fun_movement(void) {
     targ = T_NBR;
 }
 void ConfigDisplayOther(char *p){
-    getargs(&p, 9,",");
+	int p1, p2, p3;
+	char code;
+    getargs(&p, 11,",");
     if(Option.DISPLAY_TYPE)error("OPTION LCDPANEL already set");
     if(checkstring(argv[0], "HDMI")){
         if(argc != 5) error("Argument count");
@@ -300,10 +303,11 @@ void ConfigDisplayOther(char *p){
         	 Option.SSDspeed = 0;
          }
         Option.Refresh = 1;
-    } else if(checkstring(argv[0], "ILI9341") || checkstring(argv[0], "ILI9481") || checkstring(argv[0], "ILI9488")) {
+    } else if(checkstring(argv[0], "ILI9341") || checkstring(argv[0], "ILI9481") || checkstring(argv[0], "ILI9488")|| checkstring(argv[0], "ST7796S")) {
         Option.DISPLAY_TYPE = ILI9341;
         if(checkstring(argv[0], "ILI9481"))Option.DISPLAY_TYPE = ILI9481;
         if(checkstring(argv[0], "ILI9488"))Option.DISPLAY_TYPE = ILI9488;
+        if(checkstring(argv[0], "ST7796S"))Option.DISPLAY_TYPE = ST7796S;
         if(checkstring(argv[2], "L") || checkstring(argv[2], "LANDSCAPE"))
             Option.DISPLAY_ORIENTATION = LANDSCAPE;
         else if(checkstring(argv[2], "P") || checkstring(argv[2], "PORTRAIT"))
@@ -314,17 +318,44 @@ void ConfigDisplayOther(char *p){
             Option.DISPLAY_ORIENTATION = RPORTRAIT;
         else
             error("Orientation");
-
+        /*
         CheckPin(getinteger(argv[4]), CP_IGNORE_INUSE);
 
         CheckPin(getinteger(argv[6]), CP_IGNORE_INUSE);
-        if(argc == 9) {
+        if(argc>=9 && *argv[8]){
             CheckPin(getinteger(argv[8]), CP_IGNORE_INUSE);
             Option.LCD_CS = getinteger(argv[8]);
-        } else
+        } else {
             Option.LCD_CS = 0;
-        Option.LCD_CD = getinteger(argv[4]);
-        Option.LCD_Reset = getinteger(argv[6]);
+        }
+        */
+    	if((code=codecheck(argv[4])))argv[4]+=2;
+    	p1 = getinteger(argv[4]);
+    	if(code)p1=codemap(code, p1);
+    	if((code=codecheck(argv[6])))argv[6]+=2;
+    	p2 = getinteger(argv[6]);
+    	if(code)p2=codemap(code, p2);
+        CheckPin(p1, CP_IGNORE_INUSE);
+        CheckPin(p2, CP_IGNORE_INUSE);
+        //if(argc >= 9) {
+       	if(argc>=9 && *argv[8]){
+        	if((code=codecheck(argv[8])))argv[8]+=2;
+        	p3 = getinteger(argv[8]);
+        	if(code)p3=codemap(code, p3);
+            CheckPin(p3, CP_IGNORE_INUSE);
+            Option.LCD_CS = p3;
+        }else{
+            Option.LCD_CS = 0;
+        }
+       	if(argc == 11){
+        	if(checkstring(argv[10],"INVERT"))Option.BGR=1;
+        }else{
+        	Option.BGR=0;
+        }
+        //Option.LCD_CD = getinteger(argv[4]);
+        //Option.LCD_Reset = getinteger(argv[6]);
+        Option.LCD_CD = p1;
+        Option.LCD_Reset = p2;
         Option.TOUCH_XZERO = TOUCH_NOT_CALIBRATED;                      // record the touch feature as not calibrated
         Option.Refresh = 1;
     }
@@ -370,6 +401,7 @@ void InitDisplayOther(int fullinit){
     		spi_write_cd(ILI9341_PIXELFORMAT,1,0x55);
     		spi_write_cd(ILI9341_FRAMECONTROL,2,0x00,0x1B);
     		spi_write_cd(ILI9341_ENTRYMODE,1,0x07);
+    		if(Option.BGR)spi_write_cd(ILI9341_INVERTON,1,0);  //INVERT
     		spi_write_cd(ILI9341_SLEEPOUT,1,0);
     		HAL_Delay(50);
     		spi_write_command(ILI9341_NORMALDISP);
@@ -383,7 +415,7 @@ void InitDisplayOther(int fullinit){
     		}
     		memswitch=500;
     		memswitch2=500;
-    	} else if (Option.DISPLAY_TYPE == ILI9481 || Option.DISPLAY_TYPE == ILI9488)   {
+    	} else if (Option.DISPLAY_TYPE == ILI9481 || Option.DISPLAY_TYPE == ILI9488 || Option.DISPLAY_TYPE == ST7796S)   {
     		if(fullinit){
     			SetAndReserve(Option.LCD_CD, P_OUTPUT, 1, EXT_BOOT_RESERVED);                            // config data/command as an output
     			SetAndReserve(Option.LCD_Reset, P_OUTPUT, 1, EXT_BOOT_RESERVED);                         // config reset as an output
@@ -410,30 +442,52 @@ void InitDisplayOther(int fullinit){
     		  spi_write_cd(0x3A,1,0x55);
     		  spi_write_cd(0x2A,4,0x00,0x00,0x01,0x3F);
     		  spi_write_cd(0x2B,4,0x00,0x00,0x01,0xE0);
-
+    		  if(Option.BGR)spi_write_cd(ILI9341_INVERTON,1,0);  //INVERT
     		  HAL_Delay(120);
     		  spi_write_command(0x29);
     		}
     		if (Option.DISPLAY_TYPE == ILI9488) {
 
-						   spi_write_cd(0xe0,15,0x00,0x03,0x09,0x08,0x16,0x0a,0x3f,0x78,0x4c,0x09,0x0a,0x08,0x16,0x1a,0x0f); // positive Gamma Control
-						   spi_write_cd(0xe1,15,0x00,0x16,0x19,0x03,0x0f,0x05,0x32,0x45,0x46,0x04,0x0e,0x0d,0x35,0x37,0x0f);   // Negative Gamma Control
-						   spi_write_cd(0XC0,2,0x17,0x15);                // Power Control 1
-						   spi_write_cd(0xC1,1,0x41);                     // Power Control 2
-						   spi_write_cd(0xC5,3,0x00,0x12,0x80);           // VCOM Control
-						   spi_write_cd(0x36,1,0x48);                     // Memory Access Control  MX, BGR
-						   spi_write_cd(0x3A,1,0x66);                     // Pixel Interface Format // 18 bit colour for SPI 66
-						   spi_write_cd(0xB0,1,0x00);                     // Interface Mode Control
-						   spi_write_cd(0xB1,1,0xa0);                     // Frame Rate Control
-						   spi_write_cd(0xB4,1,0x02);                     // Display Inversion Control
-						   spi_write_cd(0xB6,3,0x02,0x02,0x3B);           // Display Function Control
-						   spi_write_cd(0xB7,1,0xc6);                     // Entry Mode Set
-						   spi_write_cd(0xF7,4,0xa9,0x51,0x2c,0x82);      // Adjust Control 3
-						   spi_write_command(ILI9341_NORMALDISP);
-						   spi_write_command (0x11);                     //Exit Sleep
-    		    		   HAL_Delay(120);
-    		    		   spi_write_command(ILI9341_DISPLAYON);             //Display on
-    		    		   HAL_Delay(25);                   //uSec(25000);
+				spi_write_cd(0xe0,15,0x00,0x03,0x09,0x08,0x16,0x0a,0x3f,0x78,0x4c,0x09,0x0a,0x08,0x16,0x1a,0x0f); // positive Gamma Control
+				spi_write_cd(0xe1,15,0x00,0x16,0x19,0x03,0x0f,0x05,0x32,0x45,0x46,0x04,0x0e,0x0d,0x35,0x37,0x0f);   // Negative Gamma Control
+				spi_write_cd(0XC0,2,0x17,0x15);                // Power Control 1
+				spi_write_cd(0xC1,1,0x41);                     // Power Control 2
+				spi_write_cd(0xC5,3,0x00,0x12,0x80);           // VCOM Control
+				spi_write_cd(0x36,1,0x48);                     // Memory Access Control  MX, BGR
+				spi_write_cd(0x3A,1,0x66);                     // Pixel Interface Format // 18 bit colour for SPI 66
+				spi_write_cd(0xB0,1,0x00);                     // Interface Mode Control
+				spi_write_cd(0xB1,1,0xa0);                     // Frame Rate Control
+				spi_write_cd(0xB4,1,0x02);                     // Display Inversion Control
+			    spi_write_cd(0xB6,3,0x02,0x02,0x3B);           // Display Function Control
+			    spi_write_cd(0xB7,1,0xc6);                     // Entry Mode Set
+				spi_write_cd(0xF7,4,0xa9,0x51,0x2c,0x82);      // Adjust Control 3
+				spi_write_command(ILI9341_NORMALDISP);
+				//spi_write_command(ILI9341_INVERTON);  //INVERT
+				if(Option.BGR)spi_write_cd(ILI9341_INVERTON,1,0);  //INVERT
+				spi_write_command (0x11);                     //Exit Sleep
+    		    HAL_Delay(120);
+    		    spi_write_command(ILI9341_DISPLAYON);             //Display on
+    		    HAL_Delay(25);                   //uSec(25000);
+    		}
+    		if (Option.DISPLAY_TYPE == ST7796S) {
+
+		        spi_write_cd(0xC5, 1, 0x1C);             //VCOM  Control 1 [1C]
+		        spi_write_cd(0x3A, 1, 0x55);              //565
+		        spi_write_command(0xB0);              //Interface     [00]
+		        HAL_Delay(150);
+	            //0xB1, 2, 0xB0, 0x11,        //Frame Rate Control [A0 10]
+		        spi_write_cd(0xB4, 1, 0x01);              //Inversion Control [01]
+		        spi_write_cd(0xB6, 3, 0x80, 0x02, 0x3B);  // Display Function Control [80 02 3B] .kbv SS=1, NL=480
+		        spi_write_cd(0xB7, 1, 0xC6);             //Entry Mode      [06]
+	            //    0xF7, 4, 0xA9, 0x51, 0x2C, 0x82,    //Adjustment Control 3 [A9 51 2C 82]
+		        spi_write_cd(0xF0, 1, 0xC3);              //?? lock manufacturer commands
+		        spi_write_cd(0xF0, 1, 0x96);              //
+                //		spi_write_cd(0xFB, 1, 0x3C);              //
+		        if(Option.BGR)spi_write_cd(ILI9341_INVERTON,1,0);  //INVERT
+		        spi_write_command(0x11);
+		        HAL_Delay(150);
+	            spi_write_command(0x29); //Display on
+	            HAL_Delay(150);
     		}
     		switch(Option.DISPLAY_ORIENTATION) {
             	case LANDSCAPE:     spi_write_cd(ILI9341_MEMCONTROL,1,ILI9341_Landscape); break;
@@ -2051,6 +2105,49 @@ void Display_Refresh(void){
              SpiCsHigh(Option.LCD_CS);                  //set CS high
              low_y=480; high_y=0; low_x=800; high_x=0;
              return;
+
+      }else if(Option.DISPLAY_TYPE == ST7796S ){  //RGB565 sent in 2 bytes required RRRRRGGG GGGBBBBB
+             	   unsigned char hb, lb;//, *p;
+             	   char f[960];    //3*480 =1440  2*480=960
+             	   int  k,i,j;
+                    int y;
+                     //if(!BasicRunning ) return;
+                     DefineRegionSPI(low_x, low_y, high_x, high_y, 1);
+                     PinSetBit(Option.LCD_CD, LATSET);                               //set CD high
+                     set_cs();
+                     i=(high_x-low_x+1);
+                     for(y=low_y;y<=high_y;y++){
+                     	k=0;
+                     	if(y<memswitch){
+                     		t=(uint8_t *)(screenbuff+(y * HRes + low_x) * 2);
+                     		for(j = i; j > 0; j--){
+                     		   	 hb=*t++;
+                     			 lb=*t++;
+                     			 //f[k++] = ( hb & 0xF8) ;
+                     			 //f[k++] = ((hb & 7) << 5) | (lb >> 3);
+                     			 //f[k++]= ((lb & 0x1F) << 3);
+                     			 f[k++] =  hb;
+                     			 f[k++] =  lb;
+
+                     		}
+                     	} else {
+                     		t=(uint8_t *)(screenbuff2+((y-memswitch) * HRes + low_x) * 2);
+                     		for(j = i; j > 0; j--){
+                     		   	 hb=*t++;
+                     			 lb=*t++;
+                     			 // f[k++] = ( hb & 0xF8) ;
+                     			 // f[k++] = ((hb & 7) << 5) | (lb >> 3);
+                     			 // f[k++]= ((lb & 0x1F) << 3);
+                     			 f[k++] =  hb;
+                     		     f[k++] =  lb;
+                     		}
+                     	}
+                        	HAL_SPI_Transmit(&GenSPI,(uint8_t *)f,i*2,500);
+
+                    }
+                      SpiCsHigh(Option.LCD_CS);                  //set CS high
+                      low_y=480; high_y=0; low_x=800; high_x=0;
+                      return;
 
     }else if(Option.DISPLAY_TYPE == ILI9341 || Option.DISPLAY_TYPE == ILI9481){
             int y;

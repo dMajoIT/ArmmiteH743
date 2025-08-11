@@ -121,8 +121,8 @@ void cmd_onewire(void) {
     else if((p = checkstring(cmdline, "READ")) != NULL)
         owRead(p);
 #ifdef INCLUDE_1WIRE_SEARCH
-//    else if((p = checkstring(cmdline, "SEARCH")) != NULL)
-//        owSearch(p);
+    else if((p = checkstring(cmdline, "SEARCH")) != NULL)
+        owSearch(p);
 #endif
     else
         error("Unknown command");
@@ -135,7 +135,93 @@ void cmd_onewire(void) {
  The DS18B20 command and function
 *****************************************************************************************************************************/
 
-#if !defined(LITE)
+//Updated version with timeout adjustable
+
+// this holds an array of 64-bit ints (one for each pin on the chip)
+// each number is zero if not being used for temperature measurement
+// or the timeout value if a temperature measurement is underway
+long long int *ds18b20Timers;
+
+void Init_ds18b20(int pin, int precision) {
+    // set up initial pin status (open drain, output, high)
+    ow_pinChk(pin);
+    ExtCfg(pin, EXT_NOT_CONFIG, 0);                                 // set pin to unconfigured
+    PinSetBit(pin, LATSET);
+    PinSetBit(pin, ODCSET);
+
+    ow_reset(pin);
+    ow_writeByte(pin, 0xcc);                                        // command skip the ROM
+    ow_writeByte(pin, 0x4E);                                        // write to the scratchpad
+    ow_writeByte(pin, 0x00);                                        // dummy data to TH
+    ow_writeByte(pin, 0x00);                                        // dummy data to TL
+    ow_writeByte(pin, precision << 5);                              // select the resolution
+    ow_reset(pin);
+    ow_writeByte(pin, 0xcc);                                        // skip the ROM
+    ow_writeByte(pin, 0x44);                                        // command start the conversion
+    PinSetBit(pin, LATSET);
+    PinSetBit(pin, ODCCLR);                                         // set strong pullup
+    ExtCfg(pin, EXT_DS18B20_RESERVED, 0);
+}
+
+
+void cmd_ds18b20(void) {
+    int pin, precision;
+	//getargs(&cmdline, 3,",");
+	getargs(&cmdline, 5,",");
+    if(argc < 1) error("Argument count");
+	char code;
+	if((code=codecheck(argv[0])))argv[0]+=2;
+	pin = getinteger(argv[0]);
+	if(code)pin=codemap(code, pin);
+    precision = 1;
+    if(argc >= 3 && *argv[2]) precision = getint(argv[2], 0, 3);
+	int timeout=(100 << precision);
+	if(argc==5)timeout=getint(argv[4],100,2000);
+    Init_ds18b20(pin, precision);
+    if(ds18b20Timers == NULL) ds18b20Timers = GetMemory(NBRPINS*sizeof(long long int));   // if this is the first time allocate memory for the timer array
+    ds18b20Timers[pin] = ds18b20Timer + timeout;         // set the timer count to wait for the conversion
+}
+
+
+void fun_ds18b20(void) {
+    int pin, b1, b2;
+	getargs(&ep,3,",");
+	if(!(argc==1 || argc==3))error("Syntax");
+	char code;
+	int timeout=200; //Default value'
+	if(!(code=codecheck(argv[0])))argv[0]+=2;
+	pin = getinteger(argv[0]);
+	if(code)pin=codemap(code, pin);
+	if(argc==3)timeout=getint(argv[2],100,2000);  //100ms to 2secs
+    if(ds18b20Timers == NULL || ds18b20Timers[pin] == 0) {
+        // the TIMR command has not used
+        Init_ds18b20(pin, 1);                                       // the default is 10 bits
+        HAL_Delay(timeout);                                               // and 200mS conversion
+    } else {
+        // the TIMR command has been used
+        while(ds18b20Timer < ds18b20Timers[pin]);                   // wait for the conversion
+        ds18b20Timers[pin] = 0;
+    }
+
+	if(!ow_readBit(pin)) {
+		fret = 1000.0;
+	} else {
+        ow_reset(pin);
+        ow_writeByte(pin, 0xcc);                                    // skip the ROM (again)
+        ow_writeByte(pin, 0xBE);                                    // command read data
+        b1  = ow_readByte(pin);
+        b2  = ow_readByte(pin);
+        ow_reset(pin);
+        if(b1 == 255 && b2 == 255)
+            fret = 1000.0;
+        else
+            fret = (MMFLOAT)((short)(((unsigned short)b2 << 8) | (unsigned short)b1)) / 16.0;
+    }
+    ExtCfg(pin, EXT_NOT_CONFIG, 0);
+    targ = T_NBR;
+}
+
+#ifdef OLDTEMPR
 
 // this holds an array of 64-bit ints (one for each pin on the chip)
 // each number is zero if not being used for temperature measurement
@@ -226,6 +312,9 @@ void fun_ds18b20(void) {
 
 #endif
 
+
+
+
 /****************************************************************************************************************************
  General functions
 *****************************************************************************************************************************/
@@ -237,14 +326,14 @@ void fun_ds18b20(void) {
 void owReset(char *p) {
 	int pin;
 
-#ifdef STM32F4version
+//#ifdef STM32F4version
 	char code;
 	if((code=codecheck(p)))p+=2;
 	pin = getinteger(p);
 	if(code)pin=codemap(code, pin);
-#else
-	pin = getinteger(p);
-#endif
+//#else
+//	pin = getinteger(p);
+//#endif
 	ow_pinChk(pin);
 
 // set up initial pin status (open drain, output, high)
@@ -263,14 +352,14 @@ void owWrite(char *p) {
 
 	getargs(&p, MAX_ARG_COUNT*2,",");
 	if (!(argc & 0x01) || (argc < 7)) error("Argument count");
-#ifdef STM32F4version
+//#ifdef STM32F4version
 	char code;
 	if((code=codecheck(argv[0])))argv[0]+=2;
 	pin = getinteger(argv[0]);
 	if(code)pin=codemap(code, pin);
-#else
-    pin = getint(argv[0], 1, NBRPINS);
-#endif
+//#else
+//    pin = getint(argv[0], 1, NBRPINS);
+//#endif
 	ow_pinChk(pin);
 
 	flag = getint(argv[2], 0, 15);
@@ -314,14 +403,14 @@ void owRead(char *p) {
 
 	getargs(&p, MAX_ARG_COUNT*2,",");
 	if (!(argc & 0x01) || (argc < 7)) error("Argument count");
-#ifdef STM32F4version
+//#ifdef STM32F4version
 	char code;
 	if((code=codecheck(argv[0])))argv[0]+=2;
 	pin = getinteger(argv[0]);
 	if(code)pin=codemap(code, pin);
-#else
+//#else
     pin = getint(argv[0], 1, NBRPINS);
-#endif
+//#endif
 	ow_pinChk(pin);
 
 	flag = getint(argv[2], 0, 15);
@@ -385,14 +474,14 @@ void fun_owSearch(void) {
 
 	getargs(&ep, MAX_ARG_COUNT*2,",");
 	if (!(argc & 0x01) || (argc < 3)) error("Argument count");
-#ifdef STM32F4version
+//#ifdef STM32F4version
 	char code;
 	if((code=codecheck(argv[0])))argv[0]+=2;
 	pin = getinteger(argv[0]);
 	if(code)pin=codemap(code, pin);
-#else
+//#else
     pin = getint(argv[0], 1, NBRPINS);
-#endif
+//#endif
 	ow_pinChk(pin);
 
 	flag = getinteger(argv[2]);

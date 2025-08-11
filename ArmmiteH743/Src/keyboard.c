@@ -357,19 +357,19 @@ const int UKkeyValue[202] = {
 	46,62,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PERIOD_AND_GREATER_THAN                 = 0x37,
 	47,63,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_FORWARD_SLASH_AND_QUESTION_MARK         = 0x38,
 	0,0,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_CAPS_LOCK                               = 0x39,
-	0x91,0xD1,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F1                                = 0x3A,
-	0x92,0xD2,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F2                                = 0x3B,
-	0x93,0xD3,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F3                                = 0x3C,
-	0x94,0xD4,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F4                                = 0x3D,
-	0x95,0xD5,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F5                                = 0x3E,
-	0x96,0xD6,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F6                                = 0x3F,
-	0x97,0xD7,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F7                                = 0x40,
-	0x98,0xD8,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F8                                = 0x41,
-	0x99,0xD9,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F9                                = 0x42,
-	0x9a,0xDa,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F10                               = 0x43,
-	0x9b,0xDb,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F11                               = 0x44,
-	0x9c,0xDc,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F12                               = 0x45,
-	0x9d,0x9d,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PRINT_SCREEN                      = 0x46,
+	0x91,0xB1,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F1                                = 0x3A,
+	0x92,0xB2,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F2                                = 0x3B,
+	0x93,0xB3,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F3                                = 0x3C,
+	0x94,0xB4,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F4                                = 0x3D,
+	0x95,0xB5,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F5                                = 0x3E,
+	0x96,0xB6,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F6                                = 0x3F,
+	0x97,0xB7,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F7                                = 0x40,
+	0x98,0xB8,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F8                                = 0x41,
+	0x99,0xB9,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F9                                = 0x42,
+	0x9a,0xBa,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F10                               = 0x43,
+	0x9b,0xBb,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F11                               = 0x44,
+	0x9c,0xBc,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F12                               = 0x45,
+	0x9d,0xBd,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PRINT_SCREEN                      = 0x46,
 	0,0,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_SCROLL_LOCK                             = 0x47,
 	0x9e,0x9e,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PAUSE                                   = 0x48,
 	0x84,0x84,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_INSERT                                  = 0x49,
@@ -461,19 +461,19 @@ const int USkeyValue[202] = {
 	46,62,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PERIOD_AND_GREATER_THAN                 = 0x37,
 	47,63,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_FORWARD_SLASH_AND_QUESTION_MARK         = 0x38,
 	0,0,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_CAPS_LOCK                               = 0x39,
-	0x91,0xD1,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F1                                = 0x3A,
-	0x92,0xD2,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F2                                = 0x3B,
-	0x93,0xD3,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F3                                = 0x3C,
-	0x94,0xD4,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F4                                = 0x3D,
-	0x95,0xD5,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F5                                = 0x3E,
-	0x96,0xD6,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F6                                = 0x3F,
-	0x97,0xD7,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F7                                = 0x40,
-	0x98,0xD8,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F8                                = 0x41,
-	0x99,0xD9,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F9                                = 0x42,
-	0x9a,0xDa,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F10                               = 0x43,
-	0x9b,0xDb,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F11                               = 0x44,
-	0x9c,0xDc,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F12                               = 0x45,
-	0x9d,0x9d,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PRINT_SCREEN                      = 0x46,
+	0x91,0xB1,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F1                                = 0x3A,
+	0x92,0xB2,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F2                                = 0x3B,
+	0x93,0xB3,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F3                                = 0x3C,
+	0x94,0xB4,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F4                                = 0x3D,
+	0x95,0xB5,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F5                                = 0x3E,
+	0x96,0xB6,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F6                                = 0x3F,
+	0x97,0xB7,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F7                                = 0x40,
+	0x98,0xB8,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F8                                = 0x41,
+	0x99,0xB9,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F9                                = 0x42,
+	0x9a,0xBa,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F10                               = 0x43,
+	0x9b,0xBb,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F11                               = 0x44,
+	0x9c,0xBc,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F12                               = 0x45,
+	0x9d,0xBd,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PRINT_SCREEN                      = 0x46,
 	0,0,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_SCROLL_LOCK                             = 0x47,
 	0x9e,0x9e,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PAUSE                                   = 0x48,
 	0x84,0x84,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_INSERT                                  = 0x49,
@@ -564,19 +564,19 @@ const int DEkeyValue[202] = {
 	46,58,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PERIOD_AND_GREATER_THAN                 = 0x37,
 	45,95,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_FORWARD_SLASH_AND_QUESTION_MARK         = 0x38,
 	0,0,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_CAPS_LOCK                               = 0x39,
-	0x91,0xD1,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F1                                = 0x3A,
-	0x92,0xD2,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F2                                = 0x3B,
-	0x93,0xD3,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F3                                = 0x3C,
-	0x94,0xD4,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F4                                = 0x3D,
-	0x95,0xD5,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F5                                = 0x3E,
-	0x96,0xD6,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F6                                = 0x3F,
-	0x97,0xD7,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F7                                = 0x40,
-	0x98,0xD8,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F8                                = 0x41,
-	0x99,0xD9,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F9                                = 0x42,
-	0x9a,0xDa,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F10                               = 0x43,
-	0x9b,0xDb,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F11                               = 0x44,
-	0x9c,0xDc,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F12                               = 0x45,
-	0x9d,0x9d,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PRINT_SCREEN                      = 0x46,
+	0x91,0xB1,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F1                                = 0x3A,
+	0x92,0xB2,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F2                                = 0x3B,
+	0x93,0xB3,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F3                                = 0x3C,
+	0x94,0xB4,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F4                                = 0x3D,
+	0x95,0xB5,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F5                                = 0x3E,
+	0x96,0xB6,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F6                                = 0x3F,
+	0x97,0xB7,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F7                                = 0x40,
+	0x98,0xB8,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F8                                = 0x41,
+	0x99,0xB9,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F9                                = 0x42,
+	0x9a,0xBa,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F10                               = 0x43,
+	0x9b,0xBb,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F11                               = 0x44,
+	0x9c,0xBc,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F12                               = 0x45,
+	0x9d,0xBd,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PRINT_SCREEN                      = 0x46,
 	0,0,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_SCROLL_LOCK                             = 0x47,
 	0x9e,0x9e,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PAUSE                                   = 0x48,
 	0x84,0x84,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_INSERT                                  = 0x49,
@@ -667,19 +667,19 @@ const int FRkeyValue[202] = {
 	58,47,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PERIOD_AND_GREATER_THAN               = 0x37, FR : /
 	33,167,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_FORWARD_SLASH_AND_QUESTION_MARK      = 0x38, FR ! §
 	0,0,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_CAPS_LOCK                               = 0x39,
-	0x91,0xD1,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F1                                = 0x3A,
-	0x92,0xD2,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F2                                = 0x3B,
-	0x93,0xD3,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F3                                = 0x3C,
-	0x94,0xD4,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F4                                = 0x3D,
-	0x95,0xD5,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F5                                = 0x3E,
-	0x96,0xD6,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F6                                = 0x3F,
-	0x97,0xD7,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F7                                = 0x40,
-	0x98,0xD8,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F8                                = 0x41,
-	0x99,0xD9,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F9                                = 0x42,
-	0x9a,0xDa,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F10                               = 0x43,
-	0x9b,0xDb,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F11                               = 0x44,
-	0x9c,0xDc,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F12                               = 0x45,
-	0x9d,0x9d,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PRINT_SCREEN                      = 0x46,
+	0x91,0xB1,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F1                                = 0x3A,
+	0x92,0xB2,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F2                                = 0x3B,
+	0x93,0xB3,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F3                                = 0x3C,
+	0x94,0xB4,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F4                                = 0x3D,
+	0x95,0xB5,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F5                                = 0x3E,
+	0x96,0xB6,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F6                                = 0x3F,
+	0x97,0xB7,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F7                                = 0x40,
+	0x98,0xB8,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F8                                = 0x41,
+	0x99,0xB9,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F9                                = 0x42,
+	0x9a,0xBa,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F10                               = 0x43,
+	0x9b,0xBb,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F11                               = 0x44,
+	0x9c,0xBc,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F12                               = 0x45,
+	0x9d,0xBd,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PRINT_SCREEN                      = 0x46,
 	0,0,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_SCROLL_LOCK                             = 0x47,
 	0x9e,0x9e,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PAUSE                                   = 0x48,
 	0x84,0x84,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_INSERT                                = 0x49,
@@ -770,19 +770,19 @@ const int ESkeyValue[202] = {
 	46,58,//        USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PERIOD_AND_GREATER_THAN               = 0x37,
 	45,95,//        USB_HID_KEYBOARD_KEYPAD_KEYBOARD_FORWARD_SLASH_AND_QUESTION_MARK       = 0x38,
 	0,0,//          USB_HID_KEYBOARD_KEYPAD_KEYBOARD_CAPS_LOCK                             = 0x39,
-	0x91,0xD1,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F1                                = 0x3A,
-	0x92,0xD2,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F2                                = 0x3B,
-	0x93,0xD3,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F3                                = 0x3C,
-	0x94,0xD4,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F4                                = 0x3D,
-	0x95,0xD5,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F5                                = 0x3E,
-	0x96,0xD6,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F6                                = 0x3F,
-	0x97,0xD7,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F7                                = 0x40,
-	0x98,0xD8,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F8                                = 0x41,
-	0x99,0xD9,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F9                                = 0x42,
-	0x9a,0xDa,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F10                               = 0x43,
-	0x9b,0xDb,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F11                               = 0x44,
-	0x9c,0xDc,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F12                               = 0x45,
-	0x9d,0x9d,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PRINT_SCREEN                      = 0x46,
+	0x91,0xB1,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F1                                = 0x3A,
+	0x92,0xB2,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F2                                = 0x3B,
+	0x93,0xB3,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F3                                = 0x3C,
+	0x94,0xB4,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F4                                = 0x3D,
+	0x95,0xB5,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F5                                = 0x3E,
+	0x96,0xB6,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F6                                = 0x3F,
+	0x97,0xB7,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F7                                = 0x40,
+	0x98,0xB8,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F8                                = 0x41,
+	0x99,0xB9,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F9                                = 0x42,
+	0x9a,0xBa,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F10                               = 0x43,
+	0x9b,0xBb,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F11                               = 0x44,
+	0x9c,0xBc,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F12                               = 0x45,
+	0x9d,0xBd,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PRINT_SCREEN                      = 0x46,
 	0,0,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_SCROLL_LOCK                             = 0x47,
 	0x9e,0x9e,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PAUSE                                   = 0x48,
 	0x84,0x84,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_INSERT                                = 0x49,
@@ -873,19 +873,19 @@ const int BEkeyValue[202] = {
 	58,47,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PERIOD_AND_GREATER_THAN                 = 0x37,
 	61,43,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_FORWARD_SLASH_AND_QUESTION_MARK         = 0x38,
 	0,0,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_CAPS_LOCK                               = 0x39,
-	0x91,0xD1,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F1                                = 0x3A,
-	0x92,0xD2,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F2                                = 0x3B,
-	0x93,0xD3,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F3                                = 0x3C,
-	0x94,0xD4,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F4                                = 0x3D,
-	0x95,0xD5,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F5                                = 0x3E,
-	0x96,0xD6,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F6                                = 0x3F,
-	0x97,0xD7,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F7                                = 0x40,
-	0x98,0xD8,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F8                                = 0x41,
-	0x99,0xD9,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F9                                = 0x42,
-	0x9a,0xDa,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F10                               = 0x43,
-	0x9b,0xDb,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F11                               = 0x44,
-	0x9c,0xDc,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F12                               = 0x45,
-	0x9d,0x9d,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PRINT_SCREEN                      = 0x46,
+	0x91,0xB1,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F1                                = 0x3A,
+	0x92,0xB2,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F2                                = 0x3B,
+	0x93,0xB3,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F3                                = 0x3C,
+	0x94,0xB4,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F4                                = 0x3D,
+	0x95,0xB5,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F5                                = 0x3E,
+	0x96,0xB6,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F6                                = 0x3F,
+	0x97,0xB7,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F7                                = 0x40,
+	0x98,0xB8,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F8                                = 0x41,
+	0x99,0xB9,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F9                                = 0x42,
+	0x9a,0xBa,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F10                               = 0x43,
+	0x9b,0xBb,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F11                               = 0x44,
+	0x9c,0xBc,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_F12                               = 0x45,
+	0x9d,0xBd,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PRINT_SCREEN                      = 0x46,
 	0,0,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_SCROLL_LOCK                             = 0x47,
 	0x9e,0x9e,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_PAUSE                                   = 0x48,
 	0x84,0x84,//    USB_HID_KEYBOARD_KEYPAD_KEYBOARD_INSERT                                = 0x49,
@@ -934,6 +934,19 @@ uint8_t APP_MapKeyToUsage(HID_KEYBD_Info_TypeDef *info, int keyno);
   * @param  None
   * @retval None
   */
+//#define sendCRLF 3
+//void CheckKeyboard(void){
+//	if(Option.USBKeyboard != NO_KEYBOARD){
+//	 if(USBtime){
+//		mT4IntEnable(0);
+//		HID_MenuProcess();
+//		MX_USB_HOST_Process();
+//		mT4IntEnable(1);
+//		USBtime=0;
+//	 }
+//	}
+//}
+
 #define sendCRLF 3
 void CheckKeyboard(void){
 	if(Option.USBKeyboard != NO_KEYBOARD){
@@ -941,6 +954,8 @@ void CheckKeyboard(void){
 		MX_USB_HOST_Process();
 	}
 }
+
+
 void HID_MenuInit(void)
 {
   /* Start HID Interface */
@@ -951,7 +966,7 @@ void HID_MenuInit(void)
   else if(Option.USBKeyboard==CONFIG_ES)keylayout=ESkeyValue;
   else if(Option.USBKeyboard==CONFIG_BE)keylayout=BEkeyValue;
   hid_demo.state = HID_DEMO_IDLE;
-  HID_MenuProcess();
+  //HID_MenuProcess();
 }
 
 /* Private functions --------------------------------------------------------- */
@@ -962,7 +977,7 @@ void HID_MenuInit(void)
   */
 void HID_MenuProcess(void)
 {
-  static int count=32;
+  static int count=32;    //32
   switch (hid_demo.state)
   {
   case HID_DEMO_IDLE:
@@ -971,7 +986,7 @@ void HID_MenuProcess(void)
     break;
 
   case HID_DEMO_WAIT:
-          hid_demo.state = HID_DEMO_START;
+    hid_demo.state = HID_DEMO_START;
     break;
 
   case HID_DEMO_START:
@@ -979,12 +994,13 @@ void HID_MenuProcess(void)
     {
       if (USBH_HID_GetDeviceType(&hUsbHostFS) == HID_KEYBOARD)
       {
-        hid_demo.keyboard_state = HID_KEYBOARD_IDLE;
+    	if(!CurrentLinePtr)MMPrintString("USB Keyboard Connected OK \r\n> ");
+    	hid_demo.keyboard_state = HID_KEYBOARD_IDLE;
         hid_demo.state = HID_DEMO_KEYBOARD;
 //        SD_LED_GPIO_Port->BSRR = SD_LED_Pin;
 		count=32;
 		scroll_lock=0;
-		num_lock=0;
+		num_lock=0;  //0
 		caps_lock=0;
 		sendlights=0;
       }
@@ -1006,10 +1022,15 @@ void HID_MenuProcess(void)
     if (Appli_state == APPLICATION_READY)
     {
       keyboardseen=1;
+     // MMPrintString("Keyboard Seen");PRet();
       USBH_KeybdDemo(&hUsbHostFS);
       if(!Option.noLED  && (sendlights & 0x8000)){
     	  USBH_HID_SetReport(&hUsbHostFS,HID_SEND_DATA,0,(uint8_t *)&sendlights,1);
-    	  count--;
+
+          uSec(10); //Delay added as fix for CapsLock,NumLock,ScrollLock not being set G.A. 22/06/2024
+                     // https://www.thebackshed.com/forum/ViewTopic.php?FID=16&TID=17037
+
+     	  count--;
     	  if(!count){
     		  sendlights &=0xFF;
     		  count=32;
@@ -1024,6 +1045,7 @@ void HID_MenuProcess(void)
 
   if (Appli_state == APPLICATION_DISCONNECT)
   {
+	if(!CurrentLinePtr)MMPrintString("USB Keyboard DISConnected \r\n> ");  //USBFIX
     Appli_state = APPLICATION_IDLE;
     hid_demo.state = HID_DEMO_IDLE;
     hid_demo.select = 0;
@@ -1171,6 +1193,7 @@ uint8_t APP_MapKeyToUsage(HID_KEYBD_Info_TypeDef *info, int keyno)
         	else if(keyCode==0x2D)return 0x5C;
         	else if(keyCode==0x14)return 0x40;
         	else if(keyCode==0x64)return 124;
+        	else if(keyCode==0x30)return 126;   // 48  ~
         }
         if(info->ralt && Option.USBKeyboard==CONFIG_FR){
 			 if(keyCode==0x1F)     return 126;// ~

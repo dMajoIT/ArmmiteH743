@@ -542,13 +542,17 @@ void cmd_chdir(void){
 
 
 /* A: added as not returned by getCWD with current setuo */
-void fun_cwd(void) {
-	//strcpy(sret,filepath);
-    //sret = CtoM(GetCWD());
-	strcpy(sret,"A");
+void XXXfun_cwd(void) {
+
+	sret="A";
 	strcat(sret,GetCWD());
 	CtoM(sret);
-   // sret = CtoM(GetCWD());
+    targ = T_STR;
+}
+
+
+void fun_cwd(void) {
+    sret = CtoM(GetCWD());
     targ = T_STR;
 }
 
@@ -854,7 +858,8 @@ void cmd_files(void) {
     flist=GetMemory(sizeof(s_flist)*MAXFILES);
      // print the current directory
     q = GetCWD();
-    MMPrintString("A");MMPrintString(q); MMPrintString("\r\n");
+   // MMPrintString("A");MMPrintString(q); MMPrintString("\r\n");
+    MMPrintString(q); MMPrintString("\r\n");
 
     // search for the first file/dir
     FSerror = f_findfirst(&djd, &fnod, "", p);
@@ -1385,11 +1390,11 @@ int FileEOF(int fnbr) {
 
 char *GetCWD(void) {
     char *b;
-    int i;
+   // int i;
     b = GetTempStrMemory();
     if(!InitSDCard()) return b;
     FSerror = f_getcwd(b, STRINGSIZE);
-    for(i=1;i<=strlen(b);i++)b[i-1]=b[i];
+   // for(i=1;i<=strlen(b);i++)b[i-1]=b[i];
     ErrorCheck(0);
     return b;
 }

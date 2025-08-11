@@ -87,6 +87,7 @@ int TraceOn;                                // used to track the state of TRON/T
 int OptionErrorSkip;                                               // how to handle an error
 int MMerrno;                                                        // the error number
 char MMErrMsg[MAXERRMSG];                                           // the error message
+char cmdlinebuff[STRINGSIZE];
 char *KeyInterrupt=NULL;
 volatile int Keycomplete=0;
 int keyselect=0;
@@ -184,8 +185,10 @@ void cmd_inc(void){
 		if(vartbl[VarIndex].type & T_CONST) error("Cannot change a constant");
         vtype = TypeMask(vartbl[VarIndex].type);
         if(vtype & T_STR){
+        	int size=vartbl[VarIndex].size;
         	q=getstring(argv[2]);
-        	if(*p + *q > MAXSTRLEN) error("String too long");
+        	//if(*p + *q > MAXSTRLEN) error("String too long");
+        	if(*p + *q > size) error("String too long");
 			//Mstrcat(p, getstring(argv[2]));
         	Mstrcat(p, q);
         } else if(vtype & T_NBR){
@@ -281,6 +284,8 @@ void cmd_print(void) {
 		}
 	}
 	if(docrlf) MMfputs("\2\r\n", fnbr);								// print the terminating cr/lf unless it has been suppressed
+	if(PrintPixelMode!=0)SerUSBPutS("\033[m");
+	PrintPixelMode=0;
 }
 
 
@@ -414,7 +419,7 @@ void MIPS16 cmd_list(void) {
         }
     } else if((p = checkstring(cmdline, "COMMANDS"))) {
     	step=(Option.DISPLAY_CONSOLE ? HRes/gui_font_width/16 : 5);
-    	m=0;x=10;
+    	m=0;x=9;
 		char** c=GetTempMemory((CommandTableSize+x)*sizeof(*c)+(CommandTableSize+x)*16);
 		for(i=0;i<CommandTableSize+x;i++){
 				c[m]= (char *)((int)c + sizeof(char *) * (CommandTableSize+x) + m*16);
@@ -427,7 +432,7 @@ void MIPS16 cmd_list(void) {
     			else if(m==CommandTableSize+5)strcpy(c[m],"New");
     			else if(m==CommandTableSize+6)strcpy(c[m],"Autosave");
     			else if(m==CommandTableSize+7)strcpy(c[m],"Files");
-    			else if(m==CommandTableSize+8)strcpy(c[m],"ERASE");
+    			//else if(m==CommandTableSize+8)strcpy(c[m],"ERASE");
     			else strcpy(c[m],"Cat");
     			m++;
 		}
@@ -445,24 +450,32 @@ void MIPS16 cmd_list(void) {
 		if (checkstring(cmdline, "COMMANDS V")){
 			 MMPrintString("Total of ");PInt(m-1-x);MMPrintString(" tokens\r\n");
 		}
-
+/*
     } else if((p = checkstring(cmdline, "FUNCTIONS"))) {
-    	m=0;x=9;
+    	m=0;//x=9;
+    	x=2+MMEND;
     	step=(Option.DISPLAY_CONSOLE ? HRes/gui_font_width/16 : 5);
-		char** c=GetTempMemory((TokenTableSize+x)*sizeof(*c)+(TokenTableSize+x)*16);
+		char** c=GetTempMemory((TokenTableSize+x)*sizeof(*c)+(TokenTableSize+x)*20);
 		for(i=0;i<TokenTableSize+x;i++){
-				c[m]= (char *)((int)c + sizeof(char *) * (TokenTableSize+x) + m*16);
+			    if(strcmp((char *)tokentbl[i].name,"~(")==0)continue;
+				c[m]= (char *)((int)c + sizeof(char *) * (TokenTableSize+x) + m*20);
 				if(m<TokenTableSize)strcpy(c[m],tokentbl[i].name);
-    			else if(m==TokenTableSize)strcpy(c[m],"MM.Errno");
-    			else if(m==TokenTableSize+1)strcpy(c[m],"MM.Onewire");
-    			else if(m==TokenTableSize+2)strcpy(c[m],"BIN$(");
-    			else if(m==TokenTableSize+3)strcpy(c[m],"OCT$(");
-    			else if(m==TokenTableSize+4)strcpy(c[m],"HEX$(");
-    			else if(m==TokenTableSize+5)strcpy(c[m],"MM.I2C");
-    			else if(m==TokenTableSize+6)strcpy(c[m],"MM.FONTHEIGHT");
-    			else if(m==TokenTableSize+7)strcpy(c[m],"MM.FONTWIDTH");
-    			else strcpy(c[m],"MM.Errmsg$");
+				else if(m<TokenTableSize+MMEND-1 && m>=TokenTableSize-1)strcpy(c[m],overlaid_functions[i-TokenTableSize-1]);
+				//else if(m<TokenTableSize+MMEND && m>=TokenTableSize){strcpy(c[m],overlaid_functions[0]);PIntComma(i-TokenTableSize);}
+				else if(m==TokenTableSize+MMEND-1)strcpy(c[m],"=<");
+				else if(m==TokenTableSize+MMEND)strcpy(c[m],"=>");
+				else strcpy(c[m],"MM.Info$(");
 				m++;
+    		//	else if(m==TokenTableSize)strcpy(c[m],"MM.Errno");
+    			//else if(m==TokenTableSize+1)strcpy(c[m],"MM.Onewire");
+    			//else if(m==TokenTableSize+2)strcpy(c[m],"BIN$(");
+    			//else if(m==TokenTableSize+3)strcpy(c[m],"OCT$(");
+    			//else if(m==TokenTableSize+4)strcpy(c[m],"HEX$(");
+    			//else if(m==TokenTableSize+5)strcpy(c[m],"MM.I2C");
+    			//else if(m==TokenTableSize+6)strcpy(c[m],"MM.FONTHEIGHT");
+    			//else if(m==TokenTableSize+7)strcpy(c[m],"MM.FONTWIDTH");
+    		//	else strcpy(c[m],"MM.Errmsg$");
+			//	m++;
 		}
     	sortStrings(c,m);
     	for(i=1;i<m;i+=step){
@@ -478,6 +491,41 @@ void MIPS16 cmd_list(void) {
 		if (checkstring(cmdline, "FUNCTIONS V")){
 			  MMPrintString("Total of ");PInt(m-1-x);MMPrintString(" tokens\r\n");
 		}
+*/
+    } else if((p = checkstring(cmdline, "FUNCTIONS"))) {
+       	m=0;
+       	int ListCnt = 1;
+       	step=Option.DISPLAY_CONSOLE ? HRes/gui_font_width/20 : 5;
+      //  if(Option.DISPLAY_CONSOLE && (SPIREAD  || Option.NoScroll)){ClearScreen(gui_bcolour);CurrentX=0;CurrentY=0;}
+   		int x=3+MMEND;
+   		char** c=GetTempMemory((TokenTableSize+x)*sizeof(*c)+(TokenTableSize+x)*20);
+   		for(i=0;i<TokenTableSize+x;i++){
+   				c[m]= (char *)((int)c + sizeof(char *) * (TokenTableSize+x) + m*20);
+   				if(m<TokenTableSize)strcpy(c[m],(char *)tokentbl[i].name);
+   	   			else if(m<TokenTableSize+MMEND && m>=TokenTableSize)strcpy(c[m],overlaid_functions[i-TokenTableSize]);
+       			else if(m==TokenTableSize+MMEND)strcpy(c[m],"=<");
+       			else if(m==TokenTableSize+MMEND+1)strcpy(c[m],"=>");
+       			else strcpy(c[m],"MM.Info$(");
+   				m++;
+   		}
+       	sortStrings(c,m);
+       	for(i=1;i<m-1;i+=step){
+       		for(k=0;k<step;k++){
+           		if(i+k<m-1){
+           			MMPrintString(c[i+k]);
+           			if(k!=(step-1))for(j=strlen(c[i+k]);j<15;j++)MMputchar(' ');
+           		}
+       		}
+   			if(Option.DISPLAY_CONSOLE)ListNewLine(&ListCnt, 0);
+       		else MMPrintString("\r\n");
+       	}
+   		MMPrintString("Total of ");PInt(m-2);MMPrintString(" functions and operators\r\n");
+		if (checkstring(cmdline, "FUNCTIONS V")){
+			  MMPrintString("Total of ");PInt(m-x-1);MMPrintString(" tokens\r\n");
+			 // MMPrintString("Total of ");PInt(TokenTableSize);MMPrintString(" tokens\r\n");
+
+		}
+
     } else {
         if(!(*cmdline == 0 || *cmdline == '\'')) {
         	getargs(&cmdline,1,",");
@@ -560,10 +608,12 @@ void MIPS16 cmd_run(void) {
     WatchdogSet = false;
 	PrepareProgram(true);
     // Create a global constant MM.CMDLINE$ containing 'cmd_args'.
-    void *ptr = findvar("MM.CMDLINE$", V_FIND | V_DIM_VAR | T_CONST);
+   // void *ptr = findvar("MM.CMDLINE$", V_FIND | V_DIM_VAR | T_CONST);
     CtoM(pcmd_args);
     //memcpy(ptr, pcmd_args + 1, *pcmd_args);
-    memcpy(ptr, pcmd_args, *pcmd_args + 1); // *** THW 16/4/23
+    // memcpy(ptr, pcmd_args, *pcmd_args + 1); // *** THW 16/4/23
+    Mstrcpy(cmdlinebuff, pcmd_args);
+   // MMPrintString(cmdlinebuff);PRet();
     IgnorePIN = false;
     if(Option.ProgFlashSize != PROG_FLASH_SIZEMAX) ExecuteProgram(ProgMemory + Option.ProgFlashSize);       // run anything that might be in the library
     if(*ProgMemory != T_NEWLINE) return;                            // no program to run
@@ -673,11 +723,11 @@ void cmd_erasevar(char *erase) {
 
 
 void cmd_clear(void) {
-	char *p;
-	if((p=checkstring(cmdline,"VARS"))){
-		cmd_erasevar(p);
-		return;
-	}
+	//char *p;
+	//if((p=checkstring(cmdline,"VARS"))){
+	//	cmd_erasevar(p);
+	//	return;
+	//}
 	checkend(cmdline);
 	if(LocalIndex)error("Invalid in a subroutine");
 	ClearVars(0);
@@ -1553,6 +1603,7 @@ void cmd_mid(void){
 	findvar(argv[0], V_NOFIND_ERR);
     if(vartbl[VarIndex].type & T_CONST) error("Cannot change a constant");
 	if(!(vartbl[VarIndex].type & T_STR)) error("Not a string");
+	int size=vartbl[VarIndex].size;
 	char *sourcestring=getstring(argv[0]);
 	int start=getint(argv[2],1,sourcestring[0]);
 	int num=0;
@@ -1568,7 +1619,7 @@ void cmd_mid(void){
 	if(num==value[0]) memcpy(&sourcestring[start],p,num);
 	else {
 		int change=value[0]-num;
-		if(sourcestring[0]+change>255)error("String too long");
+		if(sourcestring[0]+change>size)error("String too long");
 		memmove(&sourcestring[start+value[0]],&sourcestring[start+num],sourcestring[0]-(start+num-1));
 		sourcestring[0]+=change;
 		memcpy(&sourcestring[start],p,value[0]);
@@ -1826,8 +1877,8 @@ void cmd_read(void) {
 search_again:
     while(1) {
         if(*p == 0) p++;                                            // if it is at the end of an element skip the zero marker
-        if(*p == 0 || *p == 0xff) error("No DATA to read");         // end of the program and we still need more data
-        if(*p == T_NEWLINE) lineptr = p++;
+        if(*p == 0 /*|| *p == 0xff*/) error("No DATA to read");     // 2nd 0 so end of the program and we still need more data
+        if(*p == T_NEWLINE) lineptr = p++;                          // fix as per picomite if token 255 in use
         if(*p == T_LINENBR) p += 3;
         skipspace(p);
         if(*p == T_LABEL) {                                         // if there is a label here
@@ -2351,15 +2402,24 @@ void MIPS16 cmd_const(void) {
         else {
             if(type & T_NBR) vartbl[VarIndex].val.f = *(MMFLOAT *)v;           // and set its value
             if(type & T_INT) vartbl[VarIndex].val.i = *(long long int *)v;
-            if(type & T_STR) Mstrcpy(vartbl[VarIndex].val.s, (char *)v);
+            //if(type & T_STR) Mstrcpy(vartbl[VarIndex].val.s, (char *)v);
+            // CONST string from Picomite 6.00.02RC5
+            if(type & T_STR) {
+ 				if((char)*(char *)v<(MAXDIM-1)*sizeof(vartbl[VarIndex].dims[1])){
+ 					FreeMemorySafe((void **)&vartbl[VarIndex].val.s);
+ 					vartbl[VarIndex].val.s=(void *)&vartbl[VarIndex].dims[1];
+ 				}
+ 				Mstrcpy((char *)vartbl[VarIndex].val.s, (char *)v);
+ 			}
         }
     }
 }
 
 
 
-
-void cmd_erase(void) {
+/*
+// See CLEAR VARS
+void cmd_eraseXXX(void) {
 	int i,j,k, len;
 	char p[MAXVARLEN + 1], *s, *x;
 
@@ -2389,6 +2449,53 @@ void cmd_erase(void) {
 		if(j == varcnt) error("Cannot find $", p);
 	}
 }
+*/
+
+void cmd_erase(void) {
+	int i,j,k, len;
+	char p[MAXVARLEN + 1], *s, *x;
+
+	getargs(&cmdline, (MAX_ARG_COUNT * 2) - 1, ",");				// getargs macro must be the first executable stmt in a block
+	if((argc & 0x01) == 0) error("Argument count");
+
+	for(i = 0; i < argc; i += 2) {
+		strcpy((char *)p, argv[i]);
+        while(!isnamechar(p[strlen(p) - 1])) p[strlen(p) - 1] = 0;
+
+		makeupper(p);                                               // all variables are stored as uppercase
+		for(j = MAXVARS/2; j < MAXVARS; j++) {
+            s = p;  x = vartbl[j].name; len = strlen(p);
+            while(len > 0 && *s == *x) {                            // compare the variable to the name that we have
+                len--; s++; x++;
+            }
+            if(!(len == 0 && (*x == 0 || strlen(p) == MAXVARLEN))) continue;
+
+    		// found the variable
+			if(((vartbl[j].type & T_STR) || vartbl[j].dims[0] != 0) && !(vartbl[j].type & T_PTR)) {                 //fix from PICO
+				FreeMemorySafe((void *)&vartbl[j].val.s);                        // free any memory (if allocated)  //fix from PICO
+				vartbl[j].val.s=NULL;                                                                               //fix from PICO
+			}
+			//k=i+1;                                                            //fix from PICO
+			k=j+1;                                                              //fix from PICO
+			if(k==MAXVARS)k=MAXVARS/2;
+			if(vartbl[k].type){
+				vartbl[j].name[0]='~';
+				vartbl[j].type=T_BLOCKED;
+			} else {
+				vartbl[j].name[0]=0;
+				vartbl[j].type=T_NOTYPE;
+			}
+			//vartbl[i].dims[0] = 0;                                    // and again  //fix from PICO
+			//vartbl[i].level = 0;                                                     //fix from PICO
+			vartbl[j].dims[0] = 0;                                    // and again      //fix from PICO
+			vartbl[j].level = 0;                                                        //fix from PICO
+			Globalvarcnt--;
+			break;
+		}
+		if(j == MAXVARS) error("Cannot find $", p);
+	}
+}
+
 
 
 
@@ -2412,10 +2519,39 @@ void strCopyWithCase(char *d, char *s) {
 	*d = 0;
 }
 
+void replaceAlpha(char *str, const char *replacements[MMEND]){
+    char buffer[STRINGSIZE]; // Buffer to store the modified string
+    int bufferIndex = 0;
+    int len = strlen(str);
+    int i = 0;
+
+    while (i < len) {
+        // Check for the pattern "~(X)" where X is an uppercase letter
+     // if            (str[i] == '~' && str[i + 1] == '(' && isupper((int)str[i + 2]) && str[i + 3] == ')') {
+       	if (i<len-3 && str[i] == '~' && str[i + 1] == '(' && isupper((int)str[i + 2]) && str[i + 3] == ')') {
+            char alpha = str[i + 2]; // Extract the letter 'alpha'
+            const char *replacement = replacements[alpha - 'A']; // Get the replacement string
+
+            // Copy the replacement string into the buffer
+            strcpy(&buffer[bufferIndex], replacement);
+            bufferIndex += strlen(replacement);
+
+            i += 4; // Move past "~(X)"
+        } else {
+            // Copy the current character to the buffer
+            buffer[bufferIndex++] = str[i++];
+        }
+    }
+
+    buffer[bufferIndex] = '\0'; // Null-terminate the buffer
+    strcpy(str,  buffer); // Copy the buffer back into the original string
+}
+
 
 // list a line into a buffer (b) given a pointer to the beginning of the line (p).
 // the returned string is a C style string (terminated with a zero)
 // this is used by cmd_list(), cmd_edit() and cmd_xmodem()
+// Modified to MM. overlayed functions as per picomite
 char MIPS16 *llist(char *b, char *p) {
     int i, firstnonwhite = true;
     char *b_start = b;
@@ -2484,20 +2620,10 @@ char MIPS16 *llist(char *b, char *p) {
 
         // must be the end of a line - so return to the caller
         while(*(b-1) == ' ' && b > b_start) --b;                    // eat any spaces on the end of the line
-        *b = 0;                                                     // terminate the output buffer
-       // STR_REPLACE(inpbuf,"MM.INFO(DEVICE)","MM.DEVICE$");
-       // STR_REPLACE(inpbuf,"MM.INFO(I2C)","MM.I2C");
-       // STR_REPLACE(inpbuf,"MM.INFO","MM.INFO$");
-       // STR_REPLACE(inpbuf,"MM.INFO(ERRNO)","MM.ERRNO");
-       // STR_REPLACE(inpbuf,"MM.INFO(ERRMSG)","MM.ERRMSG$");
-       // STR_REPLACE(inpbuf,"MM.INFO(ONEWIRE)","MM.ONEWIRE");
-        ////STR_REPLACE(inpbuf,"BASE$(2,","BIN$(");
-        ////STR_REPLACE(inpbuf,"BASE$(8,","OCT$(");
-        ////STR_REPLACE(inpbuf,"BASE$(16, ","HEX$(");
-       // STR_REPLACE(inpbuf,"BIN$(OCT ","OCT$(");
-       // STR_REPLACE(inpbuf,"BIN$(HEX ","HEX$(");
-       // STR_REPLACE(inpbuf,"MM.INFO(FONTHEIGHT)","MM.FONTHEIGHT");
-       // STR_REPLACE(inpbuf,"MM.INFO(FONTWIDTH)","MM.FONTWIDTH");
+        *b = 0;  // terminate the output buffer
+		replaceAlpha((char *)b_start, overlaid_functions) ;  //replace the user version of all the MM. functions
+		//STR_REPLACE((char *)b_start, "PEEK(INT8", "PEEK(BYTE",0);
+
         return ++p;
     } // end while
 }

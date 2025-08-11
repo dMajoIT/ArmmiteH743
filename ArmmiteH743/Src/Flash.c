@@ -133,7 +133,8 @@ int FlashWriteInit(int sector) {
       if(sector == SAVED_OPTIONS_FLASH){
       	  realflashpointer=FLASH_SAVED_OPTION_ADDR ;
     	  EraseInitStruct.TypeErase = FLASH_TYPEERASE_SECTORS;
-    	  EraseInitStruct.Banks         = FLASH_BANK_2;
+    	 // EraseInitStruct.Banks         = FLASH_BANK_1;  //if options in bank 1
+    	  EraseInitStruct.Banks         = FLASH_BANK_2;    //if options in bank 2
     	  EraseInitStruct.VoltageRange = FLASH_VOLTAGE_RANGE_3;
     	  EraseInitStruct.Sector = GetSector(FLASH_SAVED_OPTION_ADDR);
     	  EraseInitStruct.NbSectors = 1;
@@ -323,7 +324,6 @@ void cmd_var(void) {
         getargs(&p, (MAX_ARG_COUNT * 2) - 1, ",");                  // getargs macro must be the first executable stmt in a block
         if(argc && (argc & 0x01) == 0) error("Invalid syntax");
 
-        // befor we start, run through the arguments checking for errors
         // before we start, run through the arguments checking for errors
         for(i = 0; i < argc; i += 2) {
             checkend(skipvar(argv[i], false));
@@ -508,7 +508,7 @@ void LoadOptions(void) {
 // erase all flash memory and reset the options to their defaults
 // used on initial firmware run
 void ResetAllOptions(void) {
-	Option.magic = 0x15642903;
+	Option.Magic =MagicKey;
     Option.Height = SCREENHEIGHT;                                   // reset the options to their defaults
     Option.Width = SCREENWIDTH;
     Option.PIN = 0;
@@ -516,11 +516,13 @@ void ResetAllOptions(void) {
     Option.Autorun = false;
     Option.Listcase = CONFIG_TITLE;
     Option.Tab = 2;
-    Option.Invert = false;
+    Option.Invert = false;      //not used armmites, micromites only
     Option.ColourCode = false;
     Option.DISPLAY_TYPE = 0;
     Option.DISPLAY_ORIENTATION = 0;
     Option.TOUCH_XSCALE = 0;
+    Option.NoScroll=0;         //NoScroll from picomites added @beta3
+    Option.BGR=0;              //Is Colour INVERTed.
     Option.TOUCH_CS = 0;
     Option.TOUCH_IRQ = 0;
    	Option.LCD_CD = 0;
@@ -644,7 +646,8 @@ void MIPS16 cmd_library(void) {
 
         // then copy the current contents of the program memory to RAM
         p = ProgMemory;
-        while(*p != 0xff) {
+       // while(*p != 0xff) {
+       while(!(p[0] == 0xff && p[1] == 0xff)){
             if(p[0] == 0 && p[1] == 0) break;                       // end of the program
 
             if(*p == T_NEWLINE) {
@@ -858,6 +861,23 @@ void MIPS16 cmd_library(void) {
         //ListProgram((char*)FLASH_LIBRARY_ADDR, false);  //TempPtr=(char*)FLASH_LIBRARY_ADDR;
         return;
      }
+     /**********************************************************************************************
+            LIBRARY RESTORE will check for the existence of Library code in the Library FLASH.
+            Its existence is normally indicated by Option.ProgFlashSize which is set when the library
+            code is saved. If library code is found then Option.ProgFlashSize is set to the library's location.
+            This can be used to restore the library after an OPTION RESET.
+      ***********************************************************************************************/
+     if(checkstring(cmdline, "RESTORE")) {  //See if library code exists and set Option.ProgFlashSize
+            p=ProgMemory+LIBRARY_FLASH_OFFSET;
+            if(*(unsigned int *)p == 0xffffffff) {  //library empty
+                 MMPrintString("No library code exists \r\n");
+        	}else{
+        		 Option.ProgFlashSize=LIBRARY_FLASH_OFFSET;
+        	     SaveOptions(1);
+                 MMPrintString("Library code restored. \r\n");
+       	    }
+            return;
+      }
 
 
      //****************** START of diagnostic commands ******************************************************************
@@ -915,7 +935,7 @@ void MIPS16 cmd_library(void) {
            }
 
      if(checkstring(cmdline, "PPROG")) {
-              if(CurrentLinePtr) error("Invalid in a program");
+             // if(CurrentLinePtr) error("Invalid in a program");
                  char *p;
              //  if(Option.PROG_FLASH_SIZE== MAX_PROG_SIZE) return;
                p = ProgMemory ;
@@ -928,7 +948,7 @@ void MIPS16 cmd_library(void) {
                return;
       }
      if(checkstring(cmdline, "PLIB")) {
-        if(CurrentLinePtr) error("Invalid in a program");
+        //if(CurrentLinePtr) error("Invalid in a program");
          char *p;
          if(Option.ProgFlashSize == PROG_FLASH_SIZEMAX) return;
          p = ProgMemory + Option.ProgFlashSize;
@@ -938,6 +958,22 @@ void MIPS16 cmd_library(void) {
          dump(p+512,256,5002);
          dump(p+768,256,5003);
          dump(p+1024,256,5004);
+        //ListProgram(ProgMemory + Option.PROG_FLASH_SIZE, false);
+         return;
+     }
+     // Diagnostic to print SAVED VARs
+     if(checkstring(cmdline, "PVAR")) {
+        //if(CurrentLinePtr) error("Invalid in a program");
+         char *p;
+         p = (char *)FLASH_SAVED_VAR_ADDR;
+         //if(Option.ProgFlashSize == PROG_FLASH_SIZEMAX) return;
+         //p = ProgMemory + Option.ProgFlashSize;
+         //dump(p-256,256,-1);
+         dump(p,256,5000);
+       //  dump(p+256,256,5001);
+       //  dump(p+512,256,5002);
+       //  dump(p+768,256,5003);
+       //  dump(p+1024,256,5004);
         //ListProgram(ProgMemory + Option.PROG_FLASH_SIZE, false);
          return;
      }

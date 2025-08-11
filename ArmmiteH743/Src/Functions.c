@@ -62,6 +62,26 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 extern RNG_HandleTypeDef hrng;
 
+const char* overlaid_functions[]={
+    "MM.HRES",
+    "MM.VRES",
+    "MM.VER",
+	"MM.I2C",
+	"MM.FONTHEIGHT",
+	"MM.FONTWIDTH",
+	"MM.HPOS",
+	"MM.VPOS",
+	"MM.ONEWIRE",
+	"MM.Errno",
+	"MM.ErrMsg$",
+	"MM.WATCHDOG",
+	"MM.DEVICE$",
+	"MM.CMDLINE$",
+    "MM.DISPLAY",
+    "MM.WIDTH",
+    "MM.HEIGHT",
+};
+
 
 /********************************************************************************************************************************************
  basic functions
@@ -410,6 +430,114 @@ void fun_asc(void) {
     targ = T_INT;
 }
 
+/*
+void fun_bit(void){
+	uint64_t *s;
+	uint64_t spos;
+	getargs(&ep, 3, (unsigned char *)",");
+	s=(uint64_t *)findvar(argv[0], V_NOFIND_ERR);
+	if(!(g_vartbl[g_VarIndex].type & T_INT)) error("Not an integer");
+	spos = getint(argv[2], 0,63);						    // the mid position
+	iret = (int64_t)(*s&(1<<spos))>>spos;
+	targ=T_INT;
+}
+void fun_byte(void){
+	unsigned char *s;
+	int spos;
+	getargs(&ep, 3, (unsigned char *)",");
+	s=(unsigned char *)findvar(argv[0], V_NOFIND_ERR);
+	if(!(g_vartbl[g_VarIndex].type & T_STR)) error("Not a string");
+	spos = getint(argv[2], 1, g_vartbl[g_VarIndex].size);						    // the mid position
+	iret = s[spos];							// this will last for the life of the command
+    targ = T_INT;
+}
+
+
+*/
+
+void fun_tilde(void){
+	targ=T_INT;
+/*
+    MMHRES,
+    MMVRES,
+    MMVER,
+    MMI2C,
+	MMFONTHEIGHT,
+	MMFONTWIDTH,
+	MMHPOS,
+	MMVPOS,
+	MMONEWIRE,
+    MMERRNO,
+    MMERRMSG,
+	MMWATCHDOG,
+	MMDEVICE,
+	MMCMDLINE
+	MMDISPLAY,
+	MMWIDTH,
+	MMHEIGHT
+*/
+	switch(*ep-'A'){
+		case MMHRES:
+			iret=HRes;
+			break;
+		case MMVRES:
+			iret=VRes;
+			break;
+		case MMVER:
+			fun_version();
+			break;
+		case MMI2C:
+			iret=mmI2Cvalue;
+			break;
+		case MMFONTHEIGHT:
+			iret = FontTable[gui_font >> 4][1] * (gui_font & 0b1111);
+			break;
+		case MMFONTWIDTH:
+			iret = FontTable[gui_font >> 4][0] * (gui_font & 0b1111);
+			break;
+		case MMHPOS:
+			iret = CurrentX;
+			break;
+		case MMVPOS:
+			iret = CurrentY;
+			break;
+		case MMONEWIRE:
+			iret = mmOWvalue;
+			break;
+		case MMERRNO:
+		    iret = MMerrno;
+			break;
+		case MMERRMSG:
+			fun_errmsg();
+			break;
+		case MMWATCHDOG:
+			iret = WatchdogSet;
+			break;
+		case MMDEVICE:
+			fun_device();
+			break;
+		case MMCMDLINE:
+			sret = GetTempMemory(STRINGSIZE);                                        // this will last for the life of the command
+			Mstrcpy(sret,cmdlinebuff);
+			targ=T_STR;
+			break;
+		case  MMDISPLAY:
+			iret=Option.DISPLAY_CONSOLE ? 1 : 0;
+			break;
+		case  MMWIDTH:
+			iret= Option.Width;
+			//iret=HRes/(short)(FontTable[gui_font >> 4][0] * (gui_font & 0b1111));
+			break;
+		case  MMHEIGHT:
+			iret= Option.Height;
+			//iret=VRes/(short)(FontTable[gui_font >> 4][1] * (gui_font & 0b1111));
+			break;
+		default:
+		iret=-1;
+	}
+}
+
+
 
 
 // return the arctangent of a number in radians
@@ -497,7 +625,7 @@ void fun_exp(void) {
     targ = T_NBR;
 }
 
-
+/*
 // utility function used by HEX$(), OCT$() and BIN$()
 //void DoHexOctBin(char *tp,int base) {
 void fun_base(void) {
@@ -514,29 +642,45 @@ void fun_base(void) {
     targ = T_STR;
 }
 
+*/
+
+// utility function used by HEX$(), OCT$() and BIN$()
+void DoHexOctBin(int base) {
+	unsigned long long int i;
+    int j = 1;
+	getargs(&ep, 3, ",");
+	i = (unsigned long long int)getinteger(argv[0]);                // get the number
+    if(argc == 3) j = getint(argv[2], 0, MAXSTRLEN);                // get the optional number of chars to return
+	if(j==0)j=1;
+	sret = GetTempStrMemory();                                      // this will last for the life of the command
+    IntToStrPad(sret, (signed long long int)i, '0', j, base);
+	CtoM(sret);
+    targ = T_STR;
+}
+
 
 
 // return the hexadecimal representation of a number
 // s$ = HEX$(nbr)
-//void fun_hex(void) {
-//    DoHexOctBin(ep,16);
-//}
+void fun_hex(void) {
+    DoHexOctBin(16);
+}
 
 
 
 // return the octal representation of a number
 // s$ = OCT$(nbr)
-//void fun_oct(void) {
-//    DoHexOctBin(ep,8);
-//}
+void fun_oct(void) {
+    DoHexOctBin(8);
+}
 
 
 
 // return the binary representation of a number
 // s$ = BIN$(nbr)
-//void fun_bin(void) {
-//    DoHexOctBin(ep,2);
-//}
+void fun_bin(void) {
+    DoHexOctBin(2);
+}
 
 
 // REGEX Using tiny-regex.c
@@ -572,26 +716,29 @@ int match_length;
 //  printf("match at idx %i, %i chars long.\n", match_idx, match_length);
 //}
 
-// syntax:  nbr = INSTR([start,] string1, string2,len)
-//          apply regex expression string2 to string1 , len is set to the length of the match
+// syntax:  nbr = INSTR([start,] string1, string2)
+//          find the position of string2 in string1 starting at start chars in string1
+// returns an integer
+//19/10/2024   Fix from picomite for error if start is an expression
+
 void fun_instr(void) {
 	char *s1 = NULL, *s2 = NULL;
-	int start = 0, n = 0 ;
+	int t, start = 0, n = 0 ;
     char *ss;
     MMFLOAT f;
     long long int  i64;
     getargs(&ep, 7, (char *)",");
 	if(!(argc==3 || argc==5 || argc==7))error("Syntax");
-    targ = T_NOTYPE;
-    evaluate(argv[0], &f, &i64, &ss, &targ, false);                   // get the value and type of the argument
-    if(targ & T_NBR){
+    t = T_NOTYPE;
+    evaluate(argv[0], &f, &i64, &ss, &t, false);                   // get the value and type of the argument
+    if(t & T_NBR){
         n=2;
 		start=getint(argv[0],0,255)-1;
-    } else if(targ & T_INT){
+    } else if(t & T_INT){
 		n=2;
 		start=getint(argv[0],0,255)-1;
-    } else if(targ & T_STR){
-
+    } else if(t & T_STR){
+		n=0;
 	} else error("Syntax");
 	if(argc < (n==2 ? 7 : 5)){
 		s1 = getstring(argv[0+n]);
@@ -995,7 +1142,33 @@ void fun_val(void) {
 }
 
 
+//Fix from Picomite
+void fun_eval(void) {
+    char *s, *st, *temp_tknbuf;
+	int t;
+    temp_tknbuf = GetTempMemory(STRINGSIZE);
+    strcpy((char *)temp_tknbuf, (char *)tknbuf);                                    // first save the current token buffer in case we are in immediate mode
+    // we have to fool the tokeniser into thinking that it is processing a program line entered at the console
+    st = GetTempMemory(STRINGSIZE);
+    strcpy((char *)st, (char *)getstring(ep));                                      // then copy the argument
+    MtoC(st);                                                       // and convert to a C string
+    inpbuf[0] = 'r'; inpbuf[1] = '=';                               // place a dummy assignment in the input buffer to keep the tokeniser happy
+    strcpy((char *)inpbuf + 2, (char *)st);
+	//multi=false;
+    tokenise(true);                                                 // and tokenise it (the result is in tknbuf)
+  	//strcpy((char *)st, (char *)(tknbuf + 2 + sizeof(CommandToken)));
+  	strcpy(st, tknbuf + 3);
+    t = T_NOTYPE;
+    evaluate(st, &fret, &iret, &s, &t, false);                   // get the value and type of the argument
+    if(t & T_STR) {
+        Mstrcpy(st, s);                                             // if it is a string then save it
+        sret = st;
+    }
+	targ=t;
+    strcpy((char *)tknbuf, (char *)temp_tknbuf);                                    // restore the saved token buffer
+}
 
+/*
 void fun_eval(void) {
     char *s, *st, *temp_tknbuf;
     temp_tknbuf = GetTempStrMemory();
@@ -1016,7 +1189,7 @@ void fun_eval(void) {
     }
     strcpy(tknbuf, temp_tknbuf);                                    // restore the saved token buffer
 }
-
+*/
 
 void fun_errno(void) {
     iret = MMerrno;
@@ -1199,7 +1372,7 @@ void fun_tab(void) {
 }
 
 
-
+/*
 // get a character from the console input queue
 // s$ = INKEY$
 void fun_inkey(void){
@@ -1214,6 +1387,25 @@ void fun_inkey(void){
 	}
     targ = T_STR;
 }
+*/
+
+// get a character from the console input queue
+// s$ = INKEY$
+// Uses MMInkey so function keys etc are resolved as per Picomites.
+void fun_inkey(void){
+    int i;
+
+	sret = GetTempStrMemory();									// this buffer is automatically zeroed so the string is zero size
+
+	i = MMInkey();
+	//i = getConsole();
+	if(i != -1) {
+		sret[0] = 1;												// this is the length
+		sret[1] = i;												// and this is the character
+	}
+    targ = T_STR;
+}
+
 
 
 

@@ -3365,12 +3365,22 @@ void DisplayPutC(char c) {
                     return;
         case '\r':  CurrentX = 0;
                     return;
+        case '\n':
+                    if(CurrentY + 2* gui_font_height > VRes) {
+                       ScrollLCD( gui_font_height);
+                    } else {
+                       CurrentY += gui_font_height;
+                    }
+                    return;
+        /*
         case '\n':  CurrentY += gui_font_height;
-                    if(CurrentY + gui_font_height >= VRes) {
+                    //if(CurrentY + gui_font_height >= VRes) {
+                   	if(CurrentY + gui_font_height >= (VRes/gui_font_height)*gui_font_height) {
                         ScrollLCD(CurrentY + gui_font_height - VRes);
                         CurrentY -= (CurrentY + gui_font_height - VRes);
                     }
                     return;
+        */
         case '\t':  do {
                         DisplayPutC(' ');
                     } while((CurrentX/gui_font_width) % Option.Tab);

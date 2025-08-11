@@ -71,17 +71,21 @@ extern RTC_HandleTypeDef hrtc;
 extern TIM_HandleTypeDef htim16;
 //extern char *ADCInterrupt;
 extern volatile int ADCcomplete;
+
 extern volatile int Keycomplete;
 extern volatile int DACcomplete;
 extern volatile uint64_t * volatile a1point, * volatile a2point, * volatile a3point;
 extern volatile MMFLOAT  * volatile a1float, * volatile a2float, * volatile a3float;
+extern MMFLOAT ADCscale[3], ADCbottom[3];
 extern int ADCmax;
+
 extern volatile int ADCchannelA;
 extern volatile int ADCchannelB;
 extern volatile int ADCchannelC;
 extern volatile int ConsoleTxBufHead;
 extern volatile int ConsoleTxBufTail;
 extern char *LCDList[];
+
 extern volatile BYTE SDCardStat;
 extern volatile int keyboardseen;
 extern a_flist *alist;
@@ -95,6 +99,8 @@ extern int codemap(char code, int pin);
 extern int codecheck(char *line);
 MMFLOAT optionangle=1.0;
 
+void  setterminal(int height,int width);
+extern int terminal_width,terminal_height;
 
 char *CSubInterrupt;
 volatile int CSubComplete=0;
@@ -102,6 +108,7 @@ volatile int CSubComplete=0;
 int SaveOptionErrorSkip=0;
 int SaveMMerrno;           // save the error number
 char SaveMMErrMsg[MAXERRMSG];  // save the error message
+extern long long int GetuSec(void);
 
 
 //void fun_backup(void){
@@ -192,7 +199,101 @@ void floatsort(MMFLOAT *farray, int n, long long *index, int flags, int startpoi
 		}
     }
 }
-
+/* enhance string sort from pico */
+void stringsort(unsigned char *sarray, int n, int offset, long long *index, int flags, int startpoint){
+	int ii,i, s = 1,isave;
+	int k;
+	unsigned char *s1,*s2,*p1,*p2;
+	unsigned char temp;
+	int reverse= 1-((flags & 1)<<1);
+    while (s){
+        s=0;
+        for(i=1;i<n;i++){
+            s2=i*offset+sarray;
+            s1=(i-1)*offset+sarray;
+            ii = *s1 < *s2 ? *s1 : *s2; //get the smaller  length
+            p1 = s1 + 1; p2 = s2 + 1;
+            k=0; //assume the strings match
+            while((ii--) && (k==0)) {
+            if(flags & 2){
+                if(toupper(*p1) > toupper(*p2)){
+                    k=reverse; //earlier in the array is bigger
+                }
+                if(toupper(*p1) < toupper(*p2)){
+                    k=-reverse; //later in the array is bigger
+                }
+            } else {
+                if(*p1 > *p2){
+                    k=reverse; //earlier in the array is bigger
+                }
+                if(*p1 < *p2){
+                    k=-reverse; //later in the array is bigger
+                }
+            }
+            p1++; p2++;
+            }
+        // if up to this point the strings match
+        // make the decision based on which one is shorter
+            if(k==0){
+                if(*s1 > *s2) k=reverse;
+                if(*s1 < *s2) k=-reverse;
+            }
+            if (k==1){ // if earlier is bigger swap them round
+                ii = *s1 > *s2 ? *s1 : *s2; //get the bigger length
+                ii++;
+                p1=s1;p2=s2;
+                while(ii--){
+                temp=*p1;
+                *p1=*p2;
+                *p2=temp;
+                p1++; p2++;
+                }
+                s=1;
+                if(index!=NULL){
+                    isave=index[i-1+startpoint];
+                    index[i-1+startpoint]=index[i+startpoint];
+                    index[i+startpoint]=isave;
+                }
+            }
+        }
+    }
+    if((flags & 5) == 5){
+        for(i=n-1;i>=0;i--){
+            s2=i*offset+sarray;
+            if(*s2 !=0)break;
+        }
+        i++;
+        if(i){
+            s2=(n-i)*offset+sarray;
+            memmove(s2,sarray,offset*i);
+            memset(sarray,0,offset*(n-i));
+            if(index!=NULL){
+                long long int *newindex=(long long int *)GetTempMemory(n* sizeof(long long int));
+                memmove(&newindex[n-i],&index[startpoint],i*sizeof(long long int));
+                memmove(newindex,&index[startpoint+i],(n-i)*sizeof(long long int));
+                memmove(&index[startpoint],newindex,n*sizeof(long long int));
+            }
+        }
+    } else if(flags & 4){
+        for(i=0;i<n;i++){
+            s2=i*offset+sarray;
+            if(*s2 !=0)break;
+        }
+        if(i){
+            s2=i*offset+sarray;
+            memmove(sarray,s2,offset*(n-i));
+            s2=(n-i)*offset+sarray;
+            memset(s2,0,offset*i);
+            if(index!=NULL){
+                long long int *newindex=(long long int *)GetTempMemory(n* sizeof(long long int));
+                memmove(newindex,&index[startpoint+i],(n-i)*sizeof(long long int));
+                memmove(&newindex[n-i],&index[startpoint],i*sizeof(long long int));
+                memmove(&index[startpoint],newindex,n*sizeof(long long int));
+            }
+        }
+    }
+}
+/*
 void stringsort(unsigned char *sarray, int n, int offset, long long *index, int flags, int startpoint){
 	int ii,i, s = 1,isave;
 	int k;
@@ -251,6 +352,40 @@ void stringsort(unsigned char *sarray, int n, int offset, long long *index, int 
     }
   }
 }
+*/
+/*enhanced sort from pico */
+void cmd_sort(void){
+    MMFLOAT *a3float=NULL;
+    int64_t *a3int=NULL,*a4int=NULL;
+    unsigned char *a3str=NULL;
+    int i, size=0, truesize,flags=0, maxsize=0, startpoint=0;
+	getargs(&cmdline,9,",");
+    size=parseany(argv[0],&a3float,&a3int,&a3str,&maxsize,true)-1;
+    truesize=size;
+    if(argc>=3 && *argv[2]){
+        int card=parseintegerarray(argv[2],&a4int,2,1,NULL,true)-1;
+    	if(card !=size)error("Array size mismatch");
+    }
+    if(argc>=5 && *argv[4])flags=getint(argv[4],0,7);
+    if(argc>=7 && *argv[6])startpoint=getint(argv[6],OptionBase,size+OptionBase);
+    size-=startpoint;
+    if(argc==9)size=getint(argv[8],1,size+1+OptionBase)-1;
+    if(startpoint)startpoint-=OptionBase;
+    if(a3float!=NULL){
+    	a3float+=startpoint;
+    	if(a4int!=NULL)for(i=0;i<truesize+1;i++)a4int[i]=i+OptionBase;
+    	floatsort(a3float, size+1, a4int, flags, startpoint);
+    } else if(a3int!=NULL){
+    	a3int+=startpoint;
+    	if(a4int!=NULL)for(i=0;i<truesize+1;i++)a4int[i]=i+OptionBase;
+    	integersort(a3int,  size+1, a4int, flags, startpoint);
+    } else if(a3str!=NULL){
+    	a3str+=((startpoint)*(maxsize+1));
+    	if(a4int!=NULL)for(i=0;i<truesize+1;i++)a4int[i]=i+OptionBase;
+    	stringsort(a3str, size+1,maxsize+1, a4int, flags, startpoint);
+    }
+}
+/*
 void cmd_sort(void){
     void *ptr1 = NULL;
     void *ptr2 = NULL;
@@ -313,6 +448,7 @@ void cmd_sort(void){
     	stringsort(a3str,  size+1,maxsize+1, a4int, flags, startpoint);
     }
 }
+*/
 void fun_datetime(void){
     sret = GetTempStrMemory();                                    // this will last for the life of the command
 	if(checkstring(ep, "NOW")){
@@ -328,7 +464,8 @@ void fun_datetime(void){
 		struct tm  *tm;
 		struct tm tma;
 		tm=&tma;
-	    time_t timestamp = getint(ep, 0x80000000, 0x7FFFFFFF); /* See README.md if your system lacks timegm(). */
+		time_t timestamp = getinteger(ep);                       /* See README.md if your system lacks timegm(). */
+	   // time_t timestamp = getint(ep, 0x80000000, 0x7FFFFFFF); /* See README.md if your system lacks timegm(). */
 	    tm=gmtime(&timestamp);
 	    IntToStrPad(sret, tm->tm_mday, '0', 2, 10);
 	    sret[2] = '-'; IntToStrPad(sret + 3, tm->tm_mon+1, '0', 2, 10);
@@ -480,7 +617,7 @@ while( 1 ) {}
 
 
 
-
+/*
 void setterminal(void){
 	  char sp[20]={0};
 	  strcpy(sp,"\033[8;");
@@ -491,6 +628,18 @@ void setterminal(void){
 	  strcat(sp,"t");
 	  if(Option.Width>=80)SerUSBPutS(sp);	//Don'tresize terminal below 80chars
 }
+*/
+
+void  setterminal(int height,int width){
+	  char sp[20]={0};
+	  strcpy(sp,"\033[8;");
+	  IntToStr(&sp[strlen(sp)],height,10);
+	  strcat(sp,";");
+	  IntToStr(&sp[strlen(sp)],width+1,10);
+	  strcat(sp,"t");
+	  SerUSBPutS(sp);					//
+}
+
 
 long long int GetuSec(void){
 	HAL_NVIC_DisableIRQ(TIM16_IRQn);
@@ -623,6 +772,494 @@ void cmd_pause(void) {
 	uSec(end);
 }
 
+
+#ifndef PREPARSE
+//void MIPS16 cmd_longString(void){
+void cmd_longString(void){
+    char *tp;
+    tp = checkstring(cmdline, (char *)"SETBYTE");
+    if(tp){
+        int64_t *dest=NULL;
+        int p=0;
+        uint8_t *q=NULL;
+        int nbr;
+        int j=0;
+    	getargs(&tp, 5, (char *)",");
+        if(argc != 5)error("Argument count");
+        j=(parseintegerarray(argv[0],&dest,1,1,NULL,true)-1)*8-1;
+        q=(uint8_t *)&dest[1];
+        p = getint(argv[2],OptionBase,j-OptionBase);
+        nbr=getint(argv[4],0,255);
+        q[p-OptionBase]=nbr;
+        return;
+    }
+    tp = checkstring(cmdline, (char *)"APPEND");
+    if(tp){
+        int64_t *dest=NULL;
+        char *p= NULL;
+        char *q= NULL;
+        int i,j,nbr;
+        getargs(&tp, 3, (char *)",");
+        if(argc != 3)error("Argument count");
+        j=parseintegerarray(argv[0],&dest,1,1,NULL,true)-1;
+        q=(char *)&dest[1];
+        q+=dest[0];
+        p=(char *)getstring(argv[2]);
+        nbr = i = *p++;
+        if(j*8 < dest[0]+i)error("Integer array too small");
+        while(i--)*q++=*p++;
+        dest[0]+=nbr;
+        return;
+    }
+    tp = checkstring(cmdline, (char *)"TRIM");
+    if(tp){
+        int64_t *dest=NULL;
+        uint32_t trim;
+        char *p, *q=NULL;
+        int i;
+        getargs(&tp, 3, (char *)",");
+        if(argc != 3)error("Argument count");
+        parseintegerarray(argv[0],&dest,1,1,NULL,true);
+        q=(char *)&dest[1];
+        trim=getint(argv[2],1,dest[0]);
+        i = dest[0]-trim;
+        p=q+trim;
+        while(i--)*q++=*p++;
+        dest[0]-=trim;
+        return;
+    }
+    tp = checkstring(cmdline, (char *)"REPLACE");
+    if(tp){
+        int64_t *dest=NULL;
+        char *p=NULL;
+        char *q=NULL;
+        int i,nbr;
+        getargs(&tp, 5, (char *)",");
+        if(argc != 5)error("Argument count");
+        parseintegerarray(argv[0],&dest,1,1,NULL,true);
+        q=(char *)&dest[1];
+        p=(char *)getstring(argv[2]);
+        nbr=getint(argv[4],1,dest[0]-*p+1);
+        q+=nbr-1;
+        i = *p++;
+        while(i--)*q++=*p++;
+        return;
+    }
+    tp = checkstring(cmdline, (char *)"LOAD");
+    if(tp){
+        int64_t *dest=NULL;
+        char *p;
+        char *q=NULL;
+        int i,j;
+        getargs(&tp, 5, ( char *)",");
+        if(argc != 5)error("Argument count");
+        int64_t nbr=getinteger(argv[2]);
+        i=nbr;
+        j=parseintegerarray(argv[0],&dest,1,1,NULL,true)-1;
+        q=(char *)&dest[1];
+        dest[0]=0;
+        p=(char *)getstring(argv[4]);
+        if(nbr> *p)nbr=*p;
+        p++;
+        if(j*8 < dest[0]+nbr)error("Integer array too small");
+        while(i--)*q++=*p++;
+        dest[0]+=nbr;
+        return;
+    }
+    tp = checkstring(cmdline, (char *)"LEFT");
+    if(tp){
+        int64_t *dest=NULL, *src=NULL;
+        char *p=NULL;
+        char *q=NULL;
+        int i,j,nbr;
+        getargs(&tp, 5, (char *)",");
+        if(argc != 5)error("Argument count");
+        j=parseintegerarray(argv[0],&dest,1,1,NULL,true)-1;
+        q=(char *)&dest[1];
+        parseintegerarray(argv[2],&src,2,1,NULL,false);
+        p=(char *)&src[1];
+        nbr=i=getinteger(argv[4]);
+        if(nbr>src[0])nbr=i=src[0];
+        if(j*8 < i)error("Destination array too small");
+        while(i--)*q++=*p++;
+        dest[0]=nbr;
+        return;
+    }
+    tp = checkstring(cmdline, (char *)"RIGHT");
+    if(tp){
+        int64_t *dest=NULL, *src=NULL;
+        char *p=NULL;
+        char *q=NULL;
+        int i,j,nbr;
+        getargs(&tp, 5, (char *)",");
+        if(argc != 5)error("Argument count");
+        j=parseintegerarray(argv[0],&dest,1,1,NULL,true)-1;
+        q=(char *)&dest[1];
+        parseintegerarray(argv[2],&src,2,1,NULL,false);
+        p=(char *)&src[1];
+        nbr=i=getinteger(argv[4]);
+        if(nbr>src[0]){
+            nbr=i=src[0];
+        } else p+=(src[0]-nbr);
+        if(j*8 < i)error("Destination array too small");
+        while(i--)*q++=*p++;
+        dest[0]=nbr;
+        return;
+    }
+    tp = checkstring(cmdline, (char *)"MID");
+    if(tp){
+       int64_t *dest=NULL, *src=NULL;
+        char *p=NULL;
+        char *q=NULL;
+        int i,j,nbr,start;
+        getargs(&tp, 7,(char *)",");
+        if(argc < 5)error("Argument count");
+        j=parseintegerarray(argv[0],&dest,1,1,NULL,true)-1;
+        q=(char *)&dest[1];
+        parseintegerarray(argv[2],&src,2,1,NULL,false);
+        p=(char *)&src[1];
+        start=getint(argv[4],1,src[0]);
+        if(argc==7)nbr=getinteger(argv[6]);
+        else nbr=src[0];
+        p+=start-1;
+        if(nbr+start>src[0]){
+            nbr=src[0]-start+1;
+        }
+        i=nbr;
+        if(j*8 < nbr)error("Destination array too small");
+        while(i--)*q++=*p++;
+        dest[0]=nbr;
+        return;
+    }
+    tp = checkstring(cmdline, (char *)"CLEAR");
+    if(tp){
+        int64_t *dest=NULL;
+        getargs(&tp, 1, (char *)",");
+        if(argc != 1)error("Argument count");
+        parseintegerarray(argv[0],&dest,1,1,NULL,true);
+        dest[0]=0;
+        return;
+    }
+    tp = checkstring(cmdline, (char *)"RESIZE");
+    if(tp){
+        int64_t *dest=NULL;
+        int j=0;
+        getargs(&tp, 3, (char *)",");
+        if(argc != 3)error("Argument count");
+        j=(parseintegerarray(argv[0],&dest,1,1,NULL,true)-1)*8;
+        dest[0] = getint(argv[2], 0, j);
+        return;
+    }
+    tp = checkstring(cmdline, (char *)"UCASE");
+    if(tp){
+        int64_t *dest=NULL;
+        char *q=NULL;
+        int i;
+        getargs(&tp, 1, (char *)",");
+        if(argc != 1)error("Argument count");
+        parseintegerarray(argv[0],&dest,1,1,NULL,true);
+        q=(char *)&dest[1];
+        i=dest[0];
+        while(i--){
+        if(*q >= 'a' && *q <= 'z')
+            *q -= 0x20;
+        q++;
+        }
+        return;
+    }
+    tp = checkstring(cmdline, (char *)"PRINT");
+    if(tp){
+        int64_t *dest=NULL;
+        char *q=NULL;
+        int j, fnbr=0;
+        int docrlf=true;
+        getargs(&tp, 5, ",;");
+        if(argc==5)error("Syntax");
+        if(argc >= 3){
+            if(*argv[0] == '#')argv[0]++;                                 // check if the first arg is a file number
+            fnbr = getinteger(argv[0]);                                 // get the number
+            parseintegerarray(argv[2],&dest,2,1,NULL,true);
+            if(*argv[3]==';')docrlf=false;
+        } else {
+            parseintegerarray(argv[0],&dest,1,1,NULL,true);
+            if(*argv[1]==';')docrlf=false;
+         }
+        q=(char *)&dest[1];
+        j=dest[0];
+        while(j--){
+            MMfputc(*q++, fnbr);
+        }
+        if(docrlf)MMfputs(( char *)"\2\r\n", fnbr);
+        return;
+    }
+    tp = checkstring(cmdline, (char *)"LCASE");
+    if(tp){
+        int64_t *dest=NULL;
+        char *q=NULL;
+        int i;
+        getargs(&tp, 1, (char *)",");
+        if(argc != 1)error("Argument count");
+        parseintegerarray(argv[0],&dest,1,1,NULL,true);
+        q=(char *)&dest[1];
+        i=dest[0];
+        while(i--){
+            if(*q >= 'A' && *q <= 'Z')
+                *q += 0x20;
+            q++;
+        }
+        return;
+    }
+    tp = checkstring(cmdline, (char *)"COPY");
+    if(tp){
+       int64_t *dest=NULL, *src=NULL;
+        char *p=NULL;
+        char *q=NULL;
+        int i=0,j;
+        getargs(&tp, 3, (char *)",");
+        if(argc != 3)error("Argument count");
+        j=parseintegerarray(argv[0],&dest,1,1,NULL,true);
+        q=(char *)&dest[1];
+        dest[0]=0;
+        parseintegerarray(argv[2],&src,2,1,NULL,false);
+        p=(char *)&src[1];
+        if((j-i)*8 < src[0])error("Destination array too small");
+        i=src[0];
+        while(i--)*q++=*p++;
+        dest[0]=src[0];
+        return;
+    }
+    tp = checkstring(cmdline, (char *)"CONCAT");
+    if(tp){
+        int64_t *dest=NULL, *src=NULL;
+        char *p=NULL;
+        char *q=NULL;
+        int i=0,j,d=0,s=0;
+        getargs(&tp, 3, (char *)",");
+        if(argc != 3)error("Argument count");
+        j=parseintegerarray(argv[0],&dest,1,1,NULL,true)-1;
+        q=(char *)&dest[1];
+        d=dest[0];
+        parseintegerarray(argv[2],&src,2,1,NULL,false);
+        p=(char *)&src[1];
+        i = s = src[0];
+        if(j*8 < (d+s))error("Destination array too small");
+        q+=d;
+        while(i--)*q++=*p++;
+        dest[0]+=src[0];
+        return;
+    }
+    error("Invalid option");
+}
+void fun_LGetStr(void){
+        char *p;
+        char *s=NULL;
+        int64_t *src=NULL;
+        int start,nbr,j;
+        getargs(&ep, 5, (char *)",");
+        if(argc != 5)error("Argument count");
+        j=(parseintegerarray(argv[0],&src,2,1,NULL,false)-1)*8;
+        start = getint(argv[2],1,j);
+        nbr = getinteger(argv[4]);
+        if(nbr < 1 || nbr > MAXSTRLEN) error("Number out of bounds");
+        if(start+nbr>src[0])nbr=src[0]-start+1;
+        sret = GetTempMemory(STRINGSIZE);                                       // this will last for the life of the command
+        s=(char *)&src[1];
+        s+=(start-1);
+        p=(char *)sret+1;
+        *sret=nbr;
+        while(nbr--)*p++=*s++;
+        *p=0;
+        targ = T_STR;
+}
+
+void fun_LGetByte(void){
+        uint8_t *s=NULL;
+        int64_t *src=NULL;
+        int start,j;
+    	getargs(&ep, 3, (char *)",");
+        if(argc != 3)error("Argument count");
+        j=(parseintegerarray(argv[0],&src,2,1,NULL,false)-1)*8;
+        s=(uint8_t *)&src[1];
+        start = getint(argv[2],OptionBase,j-OptionBase);
+        iret=s[start-OptionBase];
+        targ = T_INT;
+}
+
+// Fixes bug in LINSTR changing the regular expression if a variable - from picomite 6.00.02
+// new parsing used
+// Allows alternate form which evaluates the search string as a regular expression
+//see fun_Instr
+void fun_LInstr(void){
+	    int64_t *src=NULL;
+	   // void *ptr1 = NULL;
+       // int64_t *dest=NULL;
+        //char *srch;
+        char srch[STRINGSIZE];
+        char *str=NULL;
+        int slen,found=0,i,j,n;
+        getargs(&ep, 7, ",");
+        if(argc <3  || argc > 7)error("Argument count");
+        int64_t start;
+        if(argc>=5 && *argv[4])start=getinteger(argv[4])-1;
+        else start=0;
+        /*
+        ptr1 = findvar(argv[0], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
+        if(vartbl[VarIndex].type & T_INT) {
+            if(vartbl[VarIndex].dims[1] != 0) error("Invalid variable");
+            if(vartbl[VarIndex].dims[0] <= 0) {      // Not an array
+                error("Argument 1 must be integer array");
+            }
+            dest = (long long int *)ptr1;
+            str=(char *)&dest[0];
+        } else error("Argument 1 must be integer array");
+        j=(vartbl[VarIndex].dims[0] - OptionBase);
+        srch=getstring(argv[2]);
+        */
+        j=(parseintegerarray(argv[0],&src,2,1,NULL,false)-1);
+        str=(char *)&src[0];
+       // srch=(char *)getstring(argv[2]);
+       strcpy((char *)srch,( char *)getstring(argv[2]));
+        if(argc<7){
+            slen=*srch;
+            iret=0;
+            //if(start>dest[0] || start<0 || slen==0 || dest[0]==0 || slen>dest[0]-start)found=1;
+            if(start>src[0] || start<0 || slen==0 || src[0]==0 || slen>src[0]-start)found=1;
+            if(!found){
+                //n=dest[0]- slen - start;
+                n=src[0]- slen - start;
+
+                for(i = start; i <= n + start; i++) {
+                    if(str[i + 8] == srch[1]) {
+                        for(j = 0; j < slen; j++)
+                            if(str[j + i + 8] != srch[j + 1])
+                                break;
+                        if(j == slen) {iret= i + 1; break;}
+                    }
+                }
+            }
+        } else { //search string is a regular expression
+
+        	int match_length;
+            MMFLOAT *temp=NULL;
+            MtoC(srch);
+            temp = findvar(argv[6], V_FIND);
+            if(!(vartbl[VarIndex].type & T_NBR)) error("Invalid variable");
+
+         	int match_idx = re_match(srch, &str[start+8], &match_length);
+         	if (match_idx != -1){
+              // PInt(match_idx); PInt(match_length);
+       		    if(temp)*temp=(MMFLOAT)(match_length);
+          		//iret=match_idx;
+           		iret=match_idx+1+start;
+           		if(temp)*temp=(MMFLOAT)(match_length);
+           	}else{
+                //MMPrintString("No Match");
+              	iret=0;
+             	if(temp)*temp=0.0;
+          	}
+
+	    }
+        targ = T_INT;
+}
+/*
+// Allows alternate form which evaluates the search string as a regular expression
+//see fun_Instr
+void fun_LInstr(void){
+	    int64_t *src=NULL;
+	   // void *ptr1 = NULL;
+       // int64_t *dest=NULL;
+        char *srch;
+        char *str=NULL;
+        int slen,found=0,i,j,n;
+        getargs(&ep, 7, ",");
+        if(argc <3  || argc > 7)error("Argument count");
+        int64_t start;
+        if(argc>=5 && *argv[4])start=getinteger(argv[4])-1;
+        else start=0;
+
+        j=(parseintegerarray(argv[0],&src,2,1,NULL,false)-1);
+        str=(char *)&src[0];
+        srch=(char *)getstring(argv[2]);
+        if(argc<7){
+            slen=*srch;
+            iret=0;
+            //if(start>dest[0] || start<0 || slen==0 || dest[0]==0 || slen>dest[0]-start)found=1;
+            if(start>src[0] || start<0 || slen==0 || src[0]==0 || slen>src[0]-start)found=1;
+            if(!found){
+                //n=dest[0]- slen - start;
+                n=src[0]- slen - start;
+
+                for(i = start; i <= n + start; i++) {
+                    if(str[i + 8] == srch[1]) {
+                        for(j = 0; j < slen; j++)
+                            if(str[j + i + 8] != srch[j + 1])
+                                break;
+                        if(j == slen) {iret= i + 1; break;}
+                    }
+                }
+            }
+        } else { //search string is a regular expression
+
+        	int match_length;
+            MMFLOAT *temp=NULL;
+            MtoC(srch);
+            temp = findvar(argv[6], V_FIND);
+            if(!(vartbl[VarIndex].type & T_NBR)) error("Invalid variable");
+
+         	int match_idx = re_match(srch, &str[start+8], &match_length);
+         	if (match_idx != -1){
+              // PInt(match_idx); PInt(match_length);
+       		    if(temp)*temp=(MMFLOAT)(match_length);
+          		//iret=match_idx;
+           		iret=match_idx+1+start;
+           		if(temp)*temp=(MMFLOAT)(match_length);
+           	}else{
+                //MMPrintString("No Match");
+              	iret=0;
+             	if(temp)*temp=0.0;
+          	}
+
+	    }
+        targ = T_INT;
+}
+*/
+
+void fun_LCompare(void){
+    int64_t *dest, *src;
+    char *p=NULL;
+    char *q=NULL;
+    int d=0,s=0,found=0;
+    getargs(&ep, 3, (char *)",");
+    if(argc != 3)error("Argument count");
+    parseintegerarray(argv[0],&dest,1,1,NULL,false);
+    q=(char *)&dest[1];
+    d=dest[0];
+    parseintegerarray(argv[2],&src,1,1,NULL,false);
+    p=(char *)&src[1];
+    s=src[0];
+    while(!found) {
+        if(d == 0 && s == 0) {found=1;iret=0;}
+        if(d == 0 && !found) {found=1;iret=-1;}
+        if(s == 0 && !found) {found=1;iret=1;}
+        if(*q < *p && !found) {found=1;iret=-1;}
+        if(*q > *p && !found) {found=1;iret=1;}
+        q++;  p++;  d--; s--;
+    }
+    targ = T_INT;
+}
+
+void fun_LLen(void) {
+    int64_t *dest=NULL;
+    getargs(&ep, 1, (char *)",");
+    if(argc != 1)error("Argument count");
+    parseintegerarray(argv[0],&dest,1,1,NULL,false);
+    iret=dest[0];
+    targ = T_INT;
+}
+#endif
+
+
+#ifdef PREPARSE
 void cmd_longString(void){
     char *tp;
     tp = checkstring(cmdline, "SETBYTE");
@@ -1413,7 +2050,7 @@ void fun_LLen(void) {
     targ = T_INT;
 }
 
-
+#endif
 
 void update_clock(void){
 	RTC_TimeTypeDef sTime;
@@ -1730,6 +2367,12 @@ void cmd_option(void) {
 	        OptionEscape = true;
 	        return;
 	}
+	//tp = checkstring(cmdline, "CHARS");
+	//    if(tp) {
+	//    	if(checkstring(tp, "OFF"))	{OptionChars = false; return; }
+	 //       OptionChars = true;
+	//        return;
+	//}
 	tp = checkstring(cmdline, "EXPLICIT");
 	if(tp) {
 //        if(varcnt != 0) error("Variables already defined");
@@ -1893,15 +2536,32 @@ void cmd_option(void) {
 		return;
 	}
 
+	/*
     tp = checkstring(cmdline, "DISPLAY");
 	if(tp) {
         getargs(&tp, 3, ",");
         if(Option.DISPLAY_CONSOLE) error("Cannot change LCD console");
 		Option.Height = getint(argv[0], 5, 100);
         if(argc == 3) Option.Width = getint(argv[2], 37, 240);
-        setterminal();
+        //setterminal();
         SaveOptions(1);
 		return;
+	}
+	*/
+
+	tp = checkstring(cmdline, "DISPLAY");
+	if(tp) {
+	    getargs(&tp, 3, (char *)",");
+	    if(Option.DISPLAY_CONSOLE && argc>0 ) error("Cannot change LCD console");
+	    if(argc >= 1) Option.Height = getint(argv[0], 5, 100);
+	    if(argc == 3) Option.Width = getint(argv[2], 37, 240);
+	    if (Option.DISPLAY_CONSOLE) {
+	        setterminal((Option.Height > SCREENHEIGHT)?Option.Height:SCREENHEIGHT,(Option.Width > SCREENWIDTH)?Option.Width:SCREENWIDTH);                                                    // or height is > 24
+        }else{
+            setterminal(Option.Height,Option.Width);
+        }
+        if(argc >= 1 )SaveOptions(1);  //Only save if necessary
+	    return;
 	}
 	tp = checkstring(cmdline, "LCDPANEL");
     if(tp) {
@@ -1944,7 +2604,57 @@ void cmd_option(void) {
 	OtherOptions();
 }
 
+#define STM32_UUID       ((uint8_t*)0x1FF1E800)
+// board SN 48 bit
+static inline uint64_t mix(uint64_t h)
+{
+    h ^= h >> 23;
+    h *= 0x2127599bf4325c37ULL;
+    h ^= h >> 47;
+    //
+    return h;
+}
 
+uint64_t fastHash64(const void * buf, size_t len, uint64_t seed)
+{
+    const uint64_t m = 0x880355f21e6d1965ULL;   //Always as unsigned long long
+    const uint64_t * pos = (const uint64_t*)buf;
+    const uint64_t * end = pos + (len / 8);
+    const unsigned char * pos2;
+    uint64_t h = seed ^ (len * m);
+    uint64_t v;
+
+    while(pos != end)
+    {
+        v  = *pos++;
+        h ^= mix(v);
+        h *= m;
+    }
+
+    pos2 = (const unsigned char*)pos;
+    v = 0;
+
+    switch(len & 7)
+    {
+        case 7: v ^= (uint64_t)pos2[6] << 48;
+        case 6: v ^= (uint64_t)pos2[5] << 40;
+        case 5: v ^= (uint64_t)pos2[4] << 32;
+        case 4: v ^= (uint64_t)pos2[3] << 24;
+        case 3: v ^= (uint64_t)pos2[2] << 16;
+        case 2: v ^= (uint64_t)pos2[1] << 8;
+        case 1: v ^= (uint64_t)pos2[0];
+                h ^= mix(v);
+                h *= m;
+    }
+
+    return mix(h);
+}
+
+int64_t getBoardSerial(void)
+{
+  uint64_t hash = fastHash64(STM32_UUID, 12, 1234554321) & 0xFFFFFFFFFFFF;
+  return hash;
+}
 
 // function (which looks like a pre defined variable) to return the type of platform
 void fun_device(void){
@@ -2007,7 +2717,10 @@ void fun_info(void){
             CtoM(sret);
             targ=T_STR;
             return;
-
+		} else if(checkstring(tp, "VCC")){
+		    fret=VCC;
+		    targ=T_NBR;
+		    return;
 
 		} else error("Syntax ");
 		CtoM(sret);
@@ -2062,6 +2775,11 @@ void fun_info(void){
 		targ=T_INT;
 		return;
 	 }
+    if(checkstring(ep, "HEAP")){
+         iret=FreeSpaceOnHeap();
+         targ=T_INT;
+         return;
+    }
 	tp=checkstring(ep, "MODIFIED");
 	 if(tp){
 		if(!InitSDCard()) error((char *)FErrorMsg[20]);					// setup the SD card
@@ -2127,32 +2845,193 @@ void fun_info(void){
 		targ=T_STR;
 		return;
 	  }
+
+	 tp=checkstring(ep, "PIN");
+	  if(tp){
+       int pin;
+       char code;
+       if((code=codecheck(tp)))tp+=2;
+       pin = getinteger(tp);
+	   if(code)pin=codemap(code, pin);
+	   if(IsInvalidPin(pin))strcpy(sret,"Invalid");
+	   else if(ExtCurrentConfig[pin] & CP_IGNORE_RESERVED)strcpy(sret,"Reserved");
+	   else if(ExtCurrentConfig[pin]) strcpy(sret,"In Use");
+       else strcpy(sret,"Unused");
+       CtoM(sret);
+       targ=T_STR;
+	   return;
+     }
 /*
-	tp=checkstring(ep, "PINNO");
-	          if(tp){
-	              int pin;
-	              char code;
-	              if(!(code=codecheck(tp)))tp+=2;
-	             // else ("Syntax");
-	              pin = getinteger(tp);
-	              if(code)pin=codemap(code,pin);
-	              if(IsInvalidPin(pin))error("Invalid pin");
-	              iret=pin;
-	              targ=T_INT;
-	              return;
+    tp=checkstring(ep, "PINNO");
+    if(tp){
+	    int pin;
+	    char code;
+	    if((code=codecheck(tp)))tp+=2;
+	    // if(!(code=codecheck(tp)))tp+=2;
+	    // else ("Syntax");
+	    pin = getinteger(tp);
+	    if(code)pin=codemap(code,pin);
+	    if(IsInvalidPin(pin))error("Invalid pin");
+	    iret=pin;
+	    targ=T_INT;
+	    return;
 	}
+
+*/
+	     /*
+	      tp=checkstring(ep, "PINNO");
+	         if(tp){
+	             int pin;
+	             char code;
+	             if((code=codecheck(tp)))tp+=2;
+	             pin = getinteger(tp);
+	             if(code)pin=codemap(code,pin);
+	             if(IsInvalidPin(pin))error("Invalid pin");
+	             iret=pin;
+	             targ=T_INT;
+	             return;
+	      }
+	      */
+
+/*
+	         tp=checkstring(ep, "PINNO");
+	         if(tp){
+	         	 int pin;
+	           	 MMFLOAT f;
+	           	 long long int i64;
+	             char *ss;
+	           	 int t=0;
+	           	 char code, *ptr;
+	           	 char *string=GetTempMemory(STRINGSIZE);
+	           	 skipspace(tp);
+	           	 evaluate(tp, &f, &i64, &ss, &t, false);
+	             if(t & T_STR ){
+	                ptr=(char *)getCstring(tp);
+	                strcpy(string,ptr);
+	             } else {
+	                strcpy(string,(char *)tp);
+	             }
+	             if((code=codecheck( ( char *)string)))string+=2;
+	             pin = getinteger((char *)string);
+	             if(code)pin=codemap(code,pin);
+	             if(IsInvalidPin(pin))error("Invalid pin");
+	             targ=T_INT;
+	             iret=pin;
+	             return;
+	         }
+
 */
 
-	tp=checkstring(ep, "PIN");
-	  if(tp){
-		int pin;
-		//pin = getint(tp, 1, NBRPINS); //fromMM2
-		pin = getinteger(tp);
-		if(IsInvalidPin(pin))strcpy(sret,"Invalid");
-		else if(ExtCurrentConfig[pin] & CP_IGNORE_RESERVED)strcpy(sret,"Reserved");
-		else if(ExtCurrentConfig[pin]) strcpy(sret,"In Use");
-		else strcpy(sret,"Unused");
-	  } else {
+
+     tp=checkstring(ep, "PINNO");
+     if(tp){
+     	 int pin;
+       	 MMFLOAT f;
+       	 long long int i64;
+         char *ss;
+       	 int t=0;
+       	 char code, *ptr;
+       	 char *string=GetTempMemory(STRINGSIZE);
+       	 skipspace(tp);
+       	 if((code=codecheck(tp))){
+       		//MMPrintString("NONSTRING CODE OK");PRet();
+       		tp+=2;
+       	 	pin = getinteger(tp);
+       	    if(code)pin=codemap(code,pin);
+       	    if(IsInvalidPin(pin))error("Invalid pin");
+       	    iret=pin;
+       	    targ=T_INT;
+            return;
+       	 }else{
+       		 //if starts with P error as invalid
+       		 if (*tp=='P' || *tp=='p' ){error("Variable name can't begin with P or p");}
+       	   	 evaluate(tp, &f, &i64, &ss, &t, false);
+             if(t & T_STR ){
+               ptr=(char *)getCstring(tp);
+               strcpy(string,ptr);
+               if(!(code=codecheck( (char *)string)))error("Invalid pin identifier");
+            	  // MMPrintString("STRING CODE OK");PRet();
+               string+=2;
+               pin = getinteger((char *)string);
+               if(code)pin=codemap(code,pin);
+               if(IsInvalidPin(pin))error("Invalid pin");
+               targ=T_INT;
+               iret=pin;
+               return;
+
+             }else{
+            	MMPrintString("NOT A STRING");PRet();
+            	return;
+             }
+
+       	 }
+     }
+
+/*
+    if((tp=checkstring(ep, (unsigned char *)"PINNO"))){
+            int pin;
+            MMFLOAT f;
+            long long int i64;
+            unsigned char *ss;
+            int t=0;
+            char code, *ptr;
+            char *string=GetTempMemory(STRINGSIZE);
+            skipspace(tp);
+            if(codecheck(tp))evaluate(tp, &f, &i64, &ss, &t, false);
+            if(t & T_STR ){
+                ptr=(char *)getCstring(tp);
+                strcpy(string,ptr);
+            } else {
+                strcpy(string,(char *)tp);
+            }
+            if(!(code=codecheck( (unsigned char *)string)))string+=2;
+            else error("Syntax");
+            pin = getinteger((unsigned char *)string);
+            if(!code)pin=codemap(pin);
+            if(IsInvalidPin(pin))error("Invalid pin");
+            iret=pin;
+            targ=T_INT;
+            return;
+*/
+/*
+     if((tp=checkstring(ep, (unsigned char *)"PINNO"))){
+         int pin;
+         MMFLOAT f;
+         long long int i64;
+         unsigned char *ss;
+         int t=0;
+         char code, *ptr;
+         char *string=GetTempMemory(STRINGSIZE);
+         skipspace(tp);
+
+         if(codecheck(tp))evaluate(tp, &f, &i64, &ss, &t, false);
+         if(t & T_STR ){
+             ptr=(char *)getCstring(tp);
+             strcpy(string,ptr);
+         } else {
+             strcpy(string,(char *)tp);
+         }
+
+         if(!(code=codecheck( (unsigned char *)string)))string+=2;
+         else error("Syntax");
+         pin = getinteger((unsigned char *)string);
+         if(!code)pin=codemap(pin);
+
+         if(IsInvalidPin(pin))error("Invalid pin");
+         iret=pin;
+         targ=T_INT;
+         return;
+*/
+//	tp=checkstring(ep, "PIN");
+//	  if(tp){
+//		int pin;
+//		//pin = getint(tp, 1, NBRPINS); //fromMM2
+//		pin = getinteger(tp);
+//		if(IsInvalidPin(pin))strcpy(sret,"Invalid");
+//		else if(ExtCurrentConfig[pin] & CP_IGNORE_RESERVED)strcpy(sret,"Reserved");
+//		else if(ExtCurrentConfig[pin]) strcpy(sret,"In Use");
+//		else strcpy(sret,"Unused");
+//	  } else {
 		if(checkstring(ep, "CPUSPEED")){
 			IntToStr(sret,SystemCoreClock,10);
 		} else if(checkstring(ep, "AUTORUN")){
@@ -2185,9 +3064,27 @@ void fun_info(void){
 		 } else if(checkstring(ep, "FONTWIDTH")){
 			fun_mmcharwidth();
 			return;
+
 		 } else if(checkstring(ep, "FONTHEIGHT")){
 			fun_mmcharheight();
 			return;
+
+		 } else if(checkstring(ep, "ID")){  //Unique ID 12 bytes
+	    	int i;
+	        char id_out[25];
+	        // Generate hex one nibble at a time
+	        for (i = 0; i<24; i++) {
+	           int nibble = (TM_ID_GetUnique8(i/2) >> (4 - 4*(i%2)) ) & 0xf;
+	           id_out[i] = (char)(nibble < 10 ? nibble + '0' : nibble + 'A' - 10);
+	        }
+	        id_out[i] = 0;
+	        strcpy(sret,id_out);
+
+	     } else if(checkstring(ep, "ID48")){  //Unique ID  48 bits
+	    	iret=(int64_t)getBoardSerial();
+			targ=T_INT;
+			return;
+
 		 } else if(checkstring(ep, "HPOS")){
 			iret = CurrentX;
 			targ=T_INT;
@@ -2208,20 +3105,20 @@ void fun_info(void){
 			iret = mmI2Cvalue;
 			targ=T_INT;
 			return;
-		/*
-		 } else if(checkstring(ep, "CURRENT")){  //from CMM2 Just here for compatability of MM.INFO$
-		 		//tp=(char *)ProgMemory;
-		 		//if(*tp++ == 1 && *tp++ == 39){
-		 		//	strcpy(sret,"A:/");
-		 		//	strcat(sret,&tp[1]);
-		 		//} else strcpy(sret,"NONE");
-			    strcpy(sret,"NONE");
-		*/
-
 		 } else if(checkstring(ep, "VARCNT")){
 			iret=(int64_t)((uint32_t)varcnt);
 			targ=T_INT;
 			return;
+	     } else if(checkstring(ep, "BOOT")){
+	    	 if(_restart_reason == 0x0)strcpy(sret, "Power On");
+	    	 else if(_restart_reason == 0x1)strcpy(sret, "Reset Switch");
+	    	 else if(_restart_reason == 0x2)strcpy(sret, "MMBasic Reset");
+	    	 else if(_restart_reason == 0x3)strcpy(sret, "CPU RESTART");
+	    	 else if(_restart_reason == 0x4)strcpy(sret, "Watchdog");
+	    	 else if(_restart_reason == 0x5)strcpy(sret, "EXECUTE Timeout");
+	    	 else if(_restart_reason == 0x6)strcpy(sret, "HEAP Restart");
+	    	 else strcpy(sret, "Unknown");
+
 		 } else if(checkstring(ep, "ERRNO")){
 			iret = MMerrno;
 			targ=T_INT;
@@ -2273,9 +3170,10 @@ void fun_info(void){
 			case P_FLAC:strcpy(sret,"FLAC");break;
 			case P_DAC:strcpy(sret,"DAC");break;
 			case P_SOUND:strcpy(sret,"SOUND");break;
+			case P_SYNC:break;
 			}
 		 } else error("Syntax - Not a valid item");
-	}
+
     CtoM(sret);
 	targ=T_STR;
 }
@@ -2298,63 +3196,13 @@ void fun_restart(void) {
     targ = T_INT;
 }
 
-#ifdef STM32F4version
-static void SYSCLKConfig_STOP(void)
-{
-	  RCC_ClkInitTypeDef RCC_ClkInitStruct;
-	  RCC_OscInitTypeDef RCC_OscInitStruct;
 
-	  /* Enable Power Control clock */
-	  __HAL_RCC_PWR_CLK_ENABLE();
-
-	  /* The voltage scaling allows optimizing the power consumption when the device is
-	     clocked below the maximum system frequency, to update the voltage scaling value
-	     regarding system frequency refer to product datasheet.  */
-	  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
-	  uint32_t pFLatency = 0;
-
-	  /* Get the Oscillators configuration according to the internal RCC registers */
-	  HAL_RCC_GetOscConfig(&RCC_OscInitStruct);
-
-	  /* After wake-up from STOP reconfigure the system clock: Enable HSE and PLL */
-	  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-	  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-	  RCC_OscInitStruct.HSEState = RCC_HSE_OFF;
-	  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_OFF;
-	  if(HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-	  {
-	    Error_Handler();
-	  }
-	  /* After wake-up from STOP reconfigure the system clock: Enable HSE and PLL */
-	  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-	  RCC_OscInitStruct.HSIState = RCC_HSI_OFF;
-	  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-	  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-	  if(HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-	  {
-	    Error_Handler();
-	  }
-
-	  /* Get the Clocks configuration according to the internal RCC registers */
-	  HAL_RCC_GetClockConfig(&RCC_ClkInitStruct, &pFLatency);
-
-	  /* Select PLL as system clock source and configure the HCLK, PCLK1 and PCLK2
-	     clocks dividers */
-	  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_SYSCLK;
-	  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-	  if(HAL_RCC_ClockConfig(&RCC_ClkInitStruct, pFLatency) != HAL_OK)
-	  {
-	    Error_Handler();
-	  }
-}
-//void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
-//{
-//}
-
-#endif
+//#define CPUSLEEP
 void cmd_cpu(void) {
     char *p;
-
+#ifdef CPUSLEEP
+    int nsecs;  //GerryL SLEEP
+#endif
 //    while(!UARTTransmissionHasCompleted(UART1));                    // wait for the console UART to send whatever is in its buffer
 
     if((p = checkstring(cmdline, "RESTART"))) {
@@ -2363,53 +3211,45 @@ void cmd_cpu(void) {
     	while(ConsoleTxBufTail != ConsoleTxBufHead);
     	uSec(10000);
         SoftReset();                                                // this will restart the processor ? only works when not in debug
-#ifdef STM32F4version
-    } else if((p = checkstring(cmdline, "SLEEP"))) {
-    	if(!(*p == 0 || *p =='\'')) {
-    		int timetosleep;
-            MMFLOAT totalseconds;
-            getargs(&p, 3, ",");
-            totalseconds=getnumber(p);
-            if(totalseconds<=(1.0/2048.0))error("Invalid period");
-        	while(ConsoleTxBufTail != ConsoleTxBufHead);
-        	uSec(10000);
-            while(totalseconds>0){
-            	if(totalseconds>30.0){
-            		timetosleep=30*2048;
-            		totalseconds-=30.0;
-            	} else {
-            		timetosleep= (int)(totalseconds*2048.0);
-            		totalseconds=0.0;
-            	}
-            	HAL_NVIC_SetPriority(RTC_WKUP_IRQn, 0x0F, 0);
-            	HAL_NVIC_EnableIRQ(RTC_WKUP_IRQn);
-            	HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, timetosleep, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
-            	HAL_SuspendTick();
-            	HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFE);
-            	HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
-            	HAL_NVIC_DisableIRQ(RTC_WKUP_IRQn);
-            }
-          	 SYSCLKConfig_STOP();
-           	 HAL_ResumeTick();
-        	 MX_USB_DEVICE_Init();
-        	 MMPrintString(">\r\n");
+#ifdef CPUSLEEP
+    }
+    else if((p = checkstring(cmdline, "SLEEP"))) {
+        skipspace(p);
+        if(!(*p == 0 || *p =='\'')) {
+            // it is: CPU SLEEP seconds
+          getargs(&p, 3, ",");
+          nsecs = getint(argv[0], 0, 0xffff);     // get the sleep time
+          if(HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, nsecs,RTC_WAKEUPCLOCK_CK_SPRE_16BITS) == HAL_TIMEOUT){
+        	  Error_Handler();
+          }
+          __HAL_RTC_WAKEUPTIMER_EXTI_CLEAR_FLAG(); // here in case pin change and system reset & rerun
+          HAL_PWR_EnterSTOPMode (PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+          __HAL_RTC_WAKEUPTIMER_EXTI_CLEAR_FLAG();
+
          } else {
-           	 GPIO_InitTypeDef  GPIO_InitStruct;
-        	 while(ConsoleTxBufTail != ConsoleTxBufHead);
-         	 uSec(10000);
-        	 GPIO_InitStruct.Pin = GPIO_PIN_0;
-        	 GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-        	 GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-        	 HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-        	 HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
-        	 HAL_NVIC_EnableIRQ(EXTI0_IRQn);
-     	     HAL_SuspendTick();
-        	 HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFE);
-        	 SYSCLKConfig_STOP();
-        	 HAL_ResumeTick();
-        	 MX_USB_DEVICE_Init();
-        	 MMPrintString(">\r\n");
+            // it is just CPU SLEEP, wakeup by pin going Lo to Hi
+            // up to user to ensure outstanding tasks completed
+            HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
          }
+          RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+          RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+          uint32_t pFLatency = 0;
+          HAL_RCC_GetOscConfig(&RCC_OscInitStruct);
+          RCC_OscInitStruct. OscillatorType = RCC_OSCILLATORTYPE_HSI48|RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSE;
+          RCC_OscInitStruct.HSEState         = RCC_HSE_ON;
+          RCC_OscInitStruct.PLL.PLLState     = RCC_PLL_ON;
+          if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+          {
+                   Error_Handler();
+          }
+          HAL_RCC_GetClockConfig(&RCC_ClkInitStruct, &pFLatency);
+          //RCC_ClkInitStruct. ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK |RCC_CLOCKTYPE_D3PCLK1|RCC_CLOCKTYPE_D1PCLK1;
+          RCC_ClkInitStruct. ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK1 |RCC_CLOCKTYPE_D3PCLK1|RCC_CLOCKTYPE_D1PCLK1;
+          RCC_ClkInitStruct.SYSCLKSource   = RCC_SYSCLKSOURCE_PLLCLK;
+          if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, pFLatency) != HAL_OK)
+          {
+                   Error_Handler();
+          }
 #endif
     } else error("Syntax");
 }
@@ -2750,7 +3590,83 @@ void MIPS16 CrunchData(char **p, int c) {
 }
 
 
+void MIPS16 cmd_autosave(void) {
+    char *buf, *p;
+    int c, prevc = 0, crunch = false,append = false;
+    if(CurrentLinePtr) error("Invalid in a program");
+    char *tp=(char *)checkstring(cmdline,( char *)"APPEND");
+    if(tp){
+        // ClearRuntime()  Only want to do some of this
+    	ClearVars(0);
+        CloseAudio(1);
+        CloseAllFiles();
+        ClearExternalIO();                                              // this MUST come before InitHeap()
 
+       // p = buf = GetMemory(EDIT_BUFFER_SIZE);
+        p = buf = GetTempMemory(EDIT_BUFFER_SIZE);
+        char * fromp  = (char *)ProgMemory;
+        p = buf;
+        while(*fromp != 0xff) {
+            if(*fromp == T_NEWLINE) {
+                fromp = ( char *)llist(( char *)p, ( char *)fromp);                                // otherwise expand the line
+                p += strlen((char *)p);
+                *p++ = '\n'; *p = 0;
+            }
+            // finally, is it the end of the program?
+            if(fromp[0] == 0 || fromp[0] == 0xff) break;
+        }
+        append=true;
+        goto readin;
+    }
+    if(*cmdline) {
+        if(toupper(*cmdline) == 'C')
+            crunch = true;
+        else
+            error("Unknown command");
+    }
+
+    ClearProgram();                                            // clear any leftovers from the previous program
+    p = buf = GetTempMemory(EDIT_BUFFER_SIZE);
+    CrunchData(&p, 0);                                         // initialise the crunch data subroutine
+
+readin:
+    while((c = MMInkey()) != 0x1a && c!=F1 && c!=F2) {         // while waiting for the end of text char
+        if(append){
+        	append=false;
+        	if( c == '\n') continue;                  // throw away an initial line feed which can follow the command
+        }else{
+       	  if(p == buf && c == '\n') continue;         // throw away an initial line feed which can follow the command
+        }
+        if((p - buf) >= EDIT_BUFFER_SIZE) error("Not enough memory");
+        if(IsPrint(c) || c == '\r' || c == '\n' || c == TAB) {
+            if(c == TAB) c = ' ';
+            if(crunch)
+                CrunchData(&p, c);                                  // insert into RAM after throwing away comments. etc
+            else
+                *p++ = c;                                           // insert the input into RAM
+            {
+                if(!(c == '\n' && prevc == '\r')) MMputchar(c);     // and echo it
+                if(c == '\r') MMputchar('\n');
+            }
+            prevc = c;
+        }
+    }
+    *p = 0;                                                         // terminate the string in RAM
+    while(getConsole() != -1);                                      // clear any rubbish in the input
+//    ClearSavedVars();                                               // clear any saved variables
+    SaveProgramToFlash(buf, true);
+    ClearVars(0);
+    if(c==F2){
+        //ClearVars(0);
+        strcpy(inpbuf,"RUN\r\n");
+       // multi=false;
+        tokenise(true);                                             // turn into executable code
+        ExecuteProgram(tknbuf);                                     // execute the line straight away
+    }
+}
+
+
+/*
 
 void MIPS16 cmd_autosave(void) {
     char *buf, *p;
@@ -2795,7 +3711,7 @@ void MIPS16 cmd_autosave(void) {
     }
 
 }
-
+*/
 
 
 
@@ -2803,6 +3719,7 @@ void MIPS16 cmd_autosave(void) {
 interrupt check
 
 The priority of interrupts (highest to low) is:
+PID
 Touch (MM+ only)
 CFunction Interrupt
 ON KEY
@@ -2828,6 +3745,13 @@ int check_interrupt(void) {
 	int i, v;
 	char *intaddr;
 	static char rti[2];
+    for(int i=1;i<=MAXPID;i++){
+         if(PIDchannels[i].interrupt!=NULL && GetuSec()>PIDchannels[i].timenext && PIDchannels[i].active){
+             PIDchannels[i].timenext=GetuSec()+(PIDchannels[i].PIDparams->T * 1000000);
+             intaddr=(char *)PIDchannels[i].interrupt;
+             goto GotAnInterrupt;
+         }
+    }
 
 #if defined(MX470) || defined(STM32)
     ProcessTouch();
@@ -2938,6 +3862,11 @@ int check_interrupt(void) {
     if(ADCInterrupt != NULL && ADCcomplete){
  		ADCcomplete=false;
     	intaddr = ADCInterrupt;									    // set the next stmt to the interrupt location
+    	//for(i=0;i<=ADCmax;i++){
+    	//  a1float[i]=((MMFLOAT)(ADCscale[0]*a1point[i]) + ADCbottom[0] );
+    	//  if(ADCchannelB)a2float[i]=((MMFLOAT)(ADCscale[1]*a2point[i]) + ADCbottom[1] );
+    	//  if(ADCchannelC)a3float[i]=((MMFLOAT)(ADCscale[2]*a3point[i]) + ADCbottom[2] );
+    	//}
     	goto GotAnInterrupt;
     }
 

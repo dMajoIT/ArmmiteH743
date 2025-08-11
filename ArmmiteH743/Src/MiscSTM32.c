@@ -49,6 +49,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "Hardware_Includes.h"
 extern void SetBacklight(int intensity);
 extern char LCDAttrib;
+
 extern void CallCFuncT5(void);                                      // this is implemented in CFunction.c
 extern unsigned int CFuncT5;                                        // we should call the CFunction T5 interrupt function if this is non zero
 extern void ConfigSDCard(char *p);
@@ -63,14 +64,15 @@ extern volatile int ConsoleTxBufTail;
 	extern int CurrentSPISpeed;
 #endif
 extern RTC_HandleTypeDef hrtc;
-extern void setterminal(void);
+//extern void setterminal(void);
+extern void  setterminal(int height,int width);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 // constants and functions used in the OPTION LIST command
 char *LCDList[] = {"","VGA", "SSD1963_4", "SSD1963_5", "SSD1963_5A", "SSD1963_5ER","SSD1963_7", "SSD1963_7A","SSD1963_8", "","" ,     //0-10
 		"SSD1963_4_16", "SSD1963_5_16", "SSD1963_5A_16", "SSD1963_5ER_16","SSD1963_7_16", "SSD1963_7A_16", "SSD1963_8_16", "IPS_4_16","","",  //11-20
 		"ILI9163", "ST7735", "","",                                                                                                   //21-24
-		"USER", "ILI9481", "ILI9341", "ILI9481IPS","ILI9488","",                                                                      //25-30
+		"USER", "ILI9481", "ILI9341", "ILI9481IPS","ILI9488","ST7796S",                                                                      //25-30
 		"ILI9341_16", "ILI9341_8", "SSD1963_5_BUFF","SSD1963_7_BUFF","SSD1963_8_BUFF",                                                //31-35
 		"SSD1963_5_640","SSD1963_7_640", "SSD1963_8_640", "SSD1963_5_8BIT", "SSD1963_7_8BIT",                                         //36-40
 		"SSD1963_8_8BIT","","","", "HDMI"};                                                                                           //41-45
@@ -202,7 +204,9 @@ void printoptions(void){
 
     if((Option.DISPLAY_TYPE > SSD_PANEL && Option.DISPLAY_TYPE<= SPI_PANEL) || (Option.DISPLAY_TYPE > USER && Option.DISPLAY_TYPE <= SPI_PANEL_END)) {
         PO("LCDPANEL",1); MMPrintString((char *)LCDList[(uint8_t)Option.DISPLAY_TYPE]); MMPrintString(", "); MMPrintString((char *)OrientList[(int)Option.DISPLAY_ORIENTATION]);
-        PIntComma(Option.LCD_CD); PIntComma(Option.LCD_Reset); PIntComma(Option.LCD_CS); MMPrintString("\r\n");
+        PIntComma(Option.LCD_CD); PIntComma(Option.LCD_Reset); PIntComma(Option.LCD_CS);
+        if(Option.BGR){MMputchar(',');MMPrintString((char *)"INVERT");}
+        PRet();
     }
     if(Option.DISPLAY_TYPE > VGA && Option.DISPLAY_TYPE <= SSD_PANEL) {
         PO("LCDPANEL",1); MMPrintString((char *)LCDList[(uint8_t)Option.DISPLAY_TYPE]); MMPrintString(", "); MMPrintString((char *)OrientList[(int)Option.DISPLAY_ORIENTATION]);
@@ -254,6 +258,7 @@ void printoptions(void){
     	PO("USBKEYBOARD",1);
     	MMPrintString((char *)KBrdList[(int)Option.USBKeyboard]);
     	if(Option.USBpower)PIntComma(Option.USBpower);
+    	if(Option.noLED)PIntComma(Option.noLED);
         MMPrintString("\r\n");
 
     }
@@ -428,7 +433,11 @@ void MIPS16 OtherOptions(void) {
             PromptFont = gui_font;
             PromptFC = Option.DefaultFC;
             PromptBC = Option.DefaultBC;
-            setterminal();
+            //setterminal();
+            //Only setterminal if CONSOLE is bigger than 80*24
+            if  (Option.Width > SCREENWIDTH || Option.Height > SCREENHEIGHT){
+                 setterminal((Option.Height > SCREENHEIGHT)?Option.Height:SCREENHEIGHT,(Option.Width > SCREENWIDTH)?Option.Width:SCREENWIDTH);                    // or height is > 24
+            }
             ClearScreen(Option.DefaultBC);
             return;
         }
@@ -442,7 +451,8 @@ void MIPS16 OtherOptions(void) {
             Option.DefaultFont=0x01;
             SetFont(((Option.DefaultFont-1)<<4) | 1);
             //Option.DefaultBrightness = 100;
-            setterminal();
+           // setterminal();
+            setterminal(Option.Height,Option.Width);
             SaveOptions(1);
             ClearScreen(Option.DefaultBC);
             return;
@@ -451,11 +461,16 @@ void MIPS16 OtherOptions(void) {
 #ifdef STM32F4version
         	touchdisable();
 #endif
-            Option.Height = SCREENHEIGHT; Option.Width = SCREENWIDTH;
+           // Option.Height = SCREENHEIGHT; Option.Width = SCREENWIDTH;
+           // if(Option.DISPLAY_CONSOLE){
+           //    setterminal();
+           // }
             if(Option.DISPLAY_CONSOLE){
-               setterminal();
+                Option.Height = SCREENHEIGHT;
+                Option.Width = SCREENWIDTH;
+                setterminal(Option.Height,Option.Width);
             }
-            Option.DISPLAY_CONSOLE = Option.DISPLAY_TYPE = Option.DISPLAY_ORIENTATION = Option.SSDspeed = HRes = 0;
+            Option.DISPLAY_CONSOLE = Option.DISPLAY_TYPE = Option.DISPLAY_ORIENTATION = Option.SSDspeed = Option.BGR = HRes = 0;
             Option.DefaultFC = WHITE; Option.DefaultBC = BLACK; Option.DefaultFont = 0x01;// Option.DefaultBrightness = 100;
             DrawRectangle = (void (*)(int , int , int , int , int )) DisplayNotSet;
             DrawBitmap =  (void (*)(int , int , int , int , int , int , int , unsigned char *)) DisplayNotSet;

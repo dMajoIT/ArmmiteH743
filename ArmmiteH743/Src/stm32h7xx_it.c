@@ -57,6 +57,7 @@ extern volatile int MMAbort;
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
+extern FDCAN_HandleTypeDef hfdcan;    //CAN added
 extern HCD_HandleTypeDef hhcd_USB_OTG_FS;
 extern TIM_HandleTypeDef htim3;
 extern TIM_HandleTypeDef htim8;
@@ -76,13 +77,16 @@ extern int d1max, d2max;
 extern volatile int d1pos, d2pos;
 extern volatile uint64_t * volatile a1point, * volatile a2point, * volatile a3point;
 extern volatile MMFLOAT  * volatile a1float, * volatile a2float, * volatile a3float;
+extern MMFLOAT ADCscale[3], ADCbottom[3];
 extern int ADCmax;
+extern int ADCScaled;
 extern volatile int ADCpos;
 extern volatile int ADCchannelA;
 extern volatile int ADCchannelB;
 extern volatile int ADCchannelC;
 extern DAC_HandleTypeDef hdac1;
 extern int ADCtriggervalue;
+extern int ADCtriggertimeout;
 extern int ADCtriggerchannel;
 extern int ADCnegativeslope;
 extern volatile int ADCcomplete;
@@ -139,8 +143,11 @@ extern volatile int Keycomplete;
 extern int keyselect;
 extern volatile int TickTimer[NBRSETTICKS+1];
 extern int ExtCurrentConfig[];
-extern void SerialConsolePutC(int c);
+//extern void SerialConsolePutC(int c);
 extern uint32_t hse_value;
+extern void MMPrintString(char* s);
+
+
 
 /******************************************************************************/
 /*            Cortex Processor Interruption and Exception Handlers         */ 
@@ -294,6 +301,20 @@ void SysTick_Handler(void)
 /* For the available peripheral interrupt handler names,                      */
 /* please refer to the startup file (startup_stm32h7xx.s).                    */
 /******************************************************************************/
+
+/**
+  * @brief This function handles FDCAN1 interrupt 0.
+  */
+void FDCAN1_IT0_IRQHandler(void)
+{
+  /* USER CODE BEGIN FDCAN1_IT0_IRQn 0 */
+
+  /* USER CODE END FDCAN1_IT0_IRQn 0 */
+  HAL_FDCAN_IRQHandler(&hfdcan);
+  /* USER CODE BEGIN FDCAN1_IT0_IRQn 1 */
+
+  /* USER CODE END FDCAN1_IT0_IRQn 1 */
+}
 
 /**
 * @brief This function handles TIM3 global interrupt.
@@ -602,7 +623,8 @@ void OTG_FS_IRQHandler(void)
   /* USER CODE BEGIN OTG_FS_IRQn 0 */
 
   /* USER CODE END OTG_FS_IRQn 0 */
-  HAL_HCD_IRQHandler(&hhcd_USB_OTG_FS);
+	//MMPrintString("INT \r\n");
+   HAL_HCD_IRQHandler(&hhcd_USB_OTG_FS);
   /* USER CODE BEGIN OTG_FS_IRQn 1 */
 
   /* USER CODE END OTG_FS_IRQn 1 */
@@ -642,11 +664,24 @@ void EXTI9_5_IRQHandler(void)
 	//if(EXTI->PR & EXTI_PR_PR8_Msk) HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_8);
 	//if(EXTI->PR & EXTI_PR_PR6_Msk) HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_6);
 }
-
+/*
 void EXTI15_10_IRQHandler(void)
 {
    //HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_12); //PI8 IR
 }
+*/
+void EXTI15_10_IRQHandler (void)
+{
+  /* USER CODE BEGIN EXTI15_10_IRQn 0 */
+
+  /* USER CODE END EXTI15_10_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler( GPIO_PIN_13);
+ // HAL_GPIO_EXTI_IRQHandler( GPIO_PIN_15);
+  /* USER CODE BEGIN EXTI15_10_IRQn 1 */
+
+  /* USER CODE END EXTI15_10_IRQn 1 */
+}
+
 
 void TIM6_DAC_IRQHandler(void)
 {
@@ -688,8 +723,17 @@ void TIM6_DAC_IRQHandler(void)
 void TIM7_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM7_IRQn 0 */
-	static int lastread, ADCtriggerfound;
+	//static int lastread, ADCtriggerfound;
+	static int lastread, ADCtriggerfound,timeout;
 	int c, c1, c2=0, c3=0, a;
+	if (!ADCScaled){
+		ADCscale[0]= VCC/ADCdiv[ADCbits[ADCchannelA]];
+		ADCscale[1]= VCC/ADCdiv[ADCbits[ADCchannelB]];
+		ADCscale[2]= VCC/ADCdiv[ADCbits[ADCchannelC]];
+		ADCbottom[0]=0;
+		ADCbottom[1]=0;
+	    ADCbottom[2]=0;
+	}
 	if( (HAL_IS_BIT_SET(hadc1.Instance->ISR, EOC_SINGLE_CONV))){
 		c1=HAL_ADC_GetValue(&hadc1);
 		if(ADCpos < ADCmax)HAL_ADC_Start(&hadc1);
@@ -703,36 +747,60 @@ void TIM7_IRQHandler(void)
 			c3=HAL_ADC_GetValue(&hadc3);
 			if(ADCpos < ADCmax)HAL_ADC_Start(&hadc3);
 		}
-		a1float[ADCpos]=a1float[ADCpos]=(MMFLOAT)c1/ADCdiv[ADCbits[ADCchannelA]] * VCC;
-		if(ADCchannelB && a2float!=NULL)a2float[ADCpos]=(MMFLOAT)c2/ADCdiv[ADCbits[ADCchannelA]] * VCC;
-		if(ADCchannelC && a3float!=NULL)a3float[ADCpos]=(MMFLOAT)c3/ADCdiv[ADCbits[ADCchannelA]] * VCC;
+		//ADCscale[0]= VCC/ADCdiv[ADCbits[ADCchannelA]];
+	   // ADCscale[1]= VCC/ADCdiv[ADCbits[ADCchannelB]];
+	   // ADCscale[2]= VCC/ADCdiv[ADCbits[ADCchannelC]];
+	   // ADCbottom[0]=0;
+	   // ADCbottom[1]=0;
+	   // ADCbottom[2]=0;
+	   // a1float[i]=((MMFLOAT)(ADCscale[0]*a1point[i]) + ADCbottom[0] );
+
+		a1float[ADCpos]=((MMFLOAT)(ADCscale[0]*c1) + ADCbottom[0] );
+		if(ADCchannelB && a2float!=NULL)a2float[ADCpos]=((MMFLOAT)(ADCscale[1]*c2) + ADCbottom[1] );
+		if(ADCchannelC && a3float!=NULL)a3float[ADCpos]=((MMFLOAT)(ADCscale[2]*c3) + ADCbottom[2] );
+
+
+		//a1float[ADCpos]=(MMFLOAT)c1/ADCdiv[ADCbits[ADCchannelA]] * VCC;
+		//if(ADCchannelB && a2float!=NULL)a2float[ADCpos]=(MMFLOAT)c2/ADCdiv[ADCbits[ADCchannelA]] * VCC;
+		//if(ADCchannelC && a3float!=NULL)a3float[ADCpos]=(MMFLOAT)c3/ADCdiv[ADCbits[ADCchannelA]] * VCC;
+		//a1point[ADCpos]=c1;
+		//if(ADCchannelB)a2point[ADCpos]=c2;
+		//if(ADCchannelC)a3point[ADCpos]=c3;
+
 		if(ADCpos==ADCmax){
 			__HAL_TIM_SET_COUNTER(&htim7, 0);
 			HAL_NVIC_DisableIRQ(TIM7_IRQn);
 			HAL_TIM_Base_Stop(&htim7);
 			HAL_TIM_Base_DeInit(&htim7);
 			__HAL_RCC_TIM7_CLK_DISABLE();
-		ADCcomplete=true;
-		TIM7->SR=0;
-		return;
-	}
-	if(ADCtriggerchannel){
-		if(ADCtriggerchannel==1)c=c1;
-		else if(ADCtriggerchannel==2)c=c2;
-		else c=c3;
-		if(ADCpos==0){
+		    ADCcomplete=true;
+		    TIM7->SR=0;
+		    return;
+	    }
+	    if(ADCtriggerchannel){
+		  if(ADCtriggerchannel==1)c=c1;
+		  else if(ADCtriggerchannel==2)c=c3;
+		  else c=c2;
+		  if(ADCpos==0){
 			ADCtriggerfound=0;
 			lastread=c;
-		} else if(!ADCtriggerfound){
+			timeout=ADCtriggertimeout;
+		  } else if(!ADCtriggerfound){
 			if(ADCnegativeslope){ //if looking for down slope
 				if(lastread>=ADCtriggervalue && c<ADCtriggervalue){
 					ADCtriggerfound=1;
 				} else {
 					lastread=c;
 					ADCpos--;
-						a1float[ADCpos]=(MMFLOAT)c1/ADCdiv[ADCbits[ADCchannelA]] * VCC;
-						if(ADCchannelB)a2float[ADCpos]=(MMFLOAT)c2/ADCdiv[ADCbits[ADCchannelA]] * VCC;
-						if(ADCchannelC)a3point[ADCpos]=(MMFLOAT)c3/ADCdiv[ADCbits[ADCchannelA]] * VCC;
+					    a1float[ADCpos]=((MMFLOAT)(ADCscale[0]*c1) + ADCbottom[0] );
+						if(ADCchannelB)a2float[ADCpos]=((MMFLOAT)(ADCscale[1]*c2) + ADCbottom[1] );
+						if(ADCchannelC)a3float[ADCpos]=((MMFLOAT)(ADCscale[2]*c3) + ADCbottom[2] );
+						//a1float[ADCpos]=(MMFLOAT)c1/ADCdiv[ADCbits[ADCchannelA]] * VCC;
+						//if(ADCchannelB)a2float[ADCpos]=(MMFLOAT)c2/ADCdiv[ADCbits[ADCchannelA]] * VCC;
+						//if(ADCchannelC)a3float[ADCpos]=(MMFLOAT)c3/ADCdiv[ADCbits[ADCchannelA]] * VCC;
+						//a1point[ADCpos]=c1;
+						//if(ADCchannelB)a2point[ADCpos]=c2;
+						//if(ADCchannelC)a3point[ADCpos]=c3;
 					}
 				} else {
 					if(lastread<=ADCtriggervalue && c>ADCtriggervalue){
@@ -740,12 +808,20 @@ void TIM7_IRQHandler(void)
 					} else {
 						lastread=c;
 						ADCpos--;
-						a1float[ADCpos]=(MMFLOAT)c1/ADCdiv[ADCbits[ADCchannelA]] * VCC;
-						if(ADCchannelB)a2float[ADCpos]=(MMFLOAT)c2/ADCdiv[ADCbits[ADCchannelA]] * VCC;
-						if(ADCchannelC)a3point[ADCpos]=(MMFLOAT)c3/ADCdiv[ADCbits[ADCchannelA]] * VCC;
+						a1float[ADCpos]=((MMFLOAT)(ADCscale[0]*c1) + ADCbottom[0] );
+						if(ADCchannelB)a2float[ADCpos]=((MMFLOAT)(ADCscale[1]*c2) + ADCbottom[1] );
+						if(ADCchannelC)a3float[ADCpos]=((MMFLOAT)(ADCscale[2]*c3) + ADCbottom[2] );
+						//a1float[ADCpos]=(MMFLOAT)c1/ADCdiv[ADCbits[ADCchannelA]] * VCC;
+						//if(ADCchannelB)a2float[ADCpos]=(MMFLOAT)c2/ADCdiv[ADCbits[ADCchannelA]] * VCC;
+						//if(ADCchannelC)a3float[ADCpos]=(MMFLOAT)c3/ADCdiv[ADCbits[ADCchannelA]] * VCC;
+						//a1point[ADCpos]=c1;
+						//if(ADCchannelB)a2point[ADCpos]=c2;
+						//if(ADCchannelC)a3point[ADCpos]=c3;
 					}
 				}
-			}
+			} //trigger not found
+		    timeout--;
+		 	if(timeout==0){ADCtriggerfound=1;}
 		}
 		ADCpos++;
 	} else overrun++;

@@ -37,7 +37,7 @@
 /* USER CODE END PV */
 
 HCD_HandleTypeDef hhcd_USB_OTG_FS;
-//void Error_Handler(void);
+void Error_Handler(void);   //This is no commented in CMM2
 
 /* USER CODE BEGIN 0 */
 /* USER CODE END 0 */
@@ -80,8 +80,18 @@ void HAL_HCD_MspInit(HCD_HandleTypeDef* hcdHandle)
     GPIO_InitStruct.Alternate = GPIO_AF10_OTG1_FS;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+    // (##) Enable the HCD/USB Low Level interface clock using the following macros
+    //      (+++) __HAL_RCC_USB_OTG_FS_CLK_ENABLE();
+    //      (+++) __HAL_RCC_USB_OTG_HS_CLK_ENABLE(); (For High Speed Mode)
+    //      (+++) __HAL_RCC_USB_OTG_HS_ULPI_CLK_ENABLE(); (For High Speed Mode)
+
     /* Peripheral clock enable */
     __HAL_RCC_USB_OTG_FS_CLK_ENABLE();
+
+  //  __HAL_RCC_USB_OTG_HS_CLK_ENABLE();       //(For High Speed Mode)
+  //  __HAL_RCC_USB_OTG_HS_ULPI_CLK_ENABLE();  //(For High Speed Mode)
+
+
 
     /* Peripheral interrupt init */
     HAL_NVIC_SetPriority(OTG_FS_IRQn, 0, 0);
@@ -194,6 +204,7 @@ USBH_StatusTypeDef USBH_LL_Init(USBH_HandleTypeDef *phost)
 {
   /* Init USB_IP */
   if (phost->id == HOST_FS) {
+  HAL_HCD_DeInit(&hhcd_USB_OTG_FS); //USBFIX for intermittent startup
   /* Link the driver to the stack. */
   hhcd_USB_OTG_FS.pData = phost;
   phost->pData = &hhcd_USB_OTG_FS;
@@ -443,13 +454,23 @@ USBH_StatusTypeDef USBH_LL_DriverVBUS(USBH_HandleTypeDef *phost, uint8_t state)
   }
 
   /* USER CODE BEGIN 0 */
-
+#define XKBFIX3
+#ifdef KBFIX3
+  if (phost->id == HOST_FS) {
+    MX_DriverVbusFS(!state);
+  }
+  /* USER CODE END 0*/
+  //USBH_Delay(1000);
+  HAL_Delay(200);
+  return USBH_OK;
+}  
+#else
   /* USER CODE END 0*/
 
   USBH_Delay(50);
   return USBH_OK;
 }
-
+#endif
 /**
   * @brief  Set toggle for a pipe.
   * @param  phost: Host handle

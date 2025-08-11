@@ -62,12 +62,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define GUI_C_NORMAL            WHITE
 #define GUI_C_BCOLOUR           BLACK
-#define GUI_C_COMMENT           RGB(192, 192, 0)
+#define GUI_C_COMMENT           RGB(192, 192, 0)   //YELLOW
 #define GUI_C_KEYWORD           CYAN
-#define GUI_C_QUOTE             RGB(0, 200, 0)
-#define GUI_C_NUMBER            RGB(255, 128, 128)
-#define GUI_C_LINE              GRAY
-#define GUI_C_STATUS            (Option.ColourCode ? BROWN : gui_fcolour)
+#define GUI_C_QUOTE             RGB(0, 200, 0) //0,200,0   //GREEN
+#define GUI_C_NUMBER            RGB(255, 128, 128)         //RED
+#define GUI_C_LINE              GRAY                       //GREY
+#define GUI_C_STATUS            (Option.ColourCode ? BROWN : gui_fcolour)  //BROWN
 
 //======================================================================================
 //      Attribute               VT100 Code      VT 100 Colour       LCD Screen Colour
@@ -75,7 +75,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define VT100_C_NORMAL          "\033[97m"      // White            Foreground Colour
 #define VT100_C_COMMENT         "\033[38;2;192;192;0m"      // Yellow               Yellow
 #define VT100_C_KEYWORD         "\033[36m"      // Cyan                 Cyan
-#define VT100_C_QUOTE           "\033[32m"      // Green                Green
+#define VT100_C_QUOTE           "\033[32m"      // Green 32               Green
 #define VT100_C_NUMBER          "\033[38;2;255;128;128m"      // Red                  Red
 #define VT100_C_LINE            "\033[38;2;128;128;128m"      // White                Grey
 #define VT100_C_STATUS          "\033[38;2;255;128;0m"      // Black                Brown
@@ -85,7 +85,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 char *StartEditPoint = NULL;
 int StartEditChar = 0;
 int markmode=0;
-extern void setterminal(void);
+//extern void setterminal(void);
+//extern void  setterminal(int height,int width);
 
 
 
@@ -233,7 +234,10 @@ void cmd_edit(void) {
     if(nbrlines == 0) nbrlines++;
     if(p > EdBuff) --p;
     *p = 0;                                                         // erase the last line terminator
-    setterminal();
+    //Only setterminal if editor requires is bigger than 80*24
+    if  (Option.Width > SCREENWIDTH || Option.Height > SCREENHEIGHT){
+      setterminal((Option.Height > SCREENHEIGHT)?Option.Height:SCREENHEIGHT,(Option.Width > SCREENWIDTH)?Option.Width:SCREENWIDTH);           // or height is > 24
+    }
 
     MMPrintString("\033[?1000h");                                   // Tera Term turn on mouse click report in VT200 mode
 	MMPrintString("\0337\033[2J\033[H");									// vt100 clear screen and home cursor
@@ -581,7 +585,7 @@ void FullScreenEditor(void) {
                             WatchdogSet = false;
                             PrepareProgram(true);
                             // Create a global constant MM.CMDLINE$ containing the empty string.
-                            (void) findvar("MM.CMDLINE$", V_FIND | V_DIM_VAR | T_CONST);
+                           // (void) findvar("MM.CMDLINE$", V_FIND | V_DIM_VAR | T_CONST);
                             if(Option.ProgFlashSize != PROG_FLASH_SIZEMAX) ExecuteProgram(ProgMemory + Option.ProgFlashSize);       // run anything that might be in the library
 							nextstmt = ProgMemory;
 							return;

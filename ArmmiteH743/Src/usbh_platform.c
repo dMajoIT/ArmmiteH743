@@ -48,7 +48,14 @@ void MX_DriverVbusFS(uint8_t state)
     data = GPIO_PIN_RESET;
   }
   /* USER CODE END PREPARE_GPIO_DATA_VBUS_FS */
+#define XKBFIX4
+#ifdef KBFIX4
+  HAL_GPIO_WritePin(GPIOG,GPIO_PIN_6,(GPIO_PinState)data);  // PG6  Nucleo V1
+  HAL_GPIO_WritePin(GPIOD,GPIO_PIN_10,(GPIO_PinState)data); // PD10 Nucleo V2
+#else  
   HAL_GPIO_WritePin(GPIOC,GPIO_PIN_13,(GPIO_PinState)data);
+
+#endif  
 }
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

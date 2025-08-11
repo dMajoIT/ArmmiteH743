@@ -79,10 +79,12 @@ void cmd_pwm(void) {
     }
 
 	if(cmdtoken == GetCommandValue("PWM")) {
-        f = getint(argv[2], 1, 20000000);
+        //f = getint(argv[2], 1, 20000000);
+        f = getint(argv[2],-20000000, 20000000);
+     	if (f==0)error("frequency cannot be 0");
         do {
         	prescale++;
-        	counts=round((double)SystemCoreClock /(double)2.0/(double)prescale/(double)f);
+        	counts=round((double)SystemCoreClock /(double)2.0/(double)prescale/(double)abs(f));
         } while(counts>65535);
         counts--;
         prescale--;
@@ -101,6 +103,7 @@ void cmd_pwm(void) {
     } else {
         // Command must be SERVO
         f = getinteger(argv[2]);
+        if (f<0)error("OC not supported for SERVO");
         if(f >= 20) { //must be a frequency
             if(f > 1000) error("% out of bounds", f);
             j = 4;
@@ -159,6 +162,7 @@ void cmd_pwm(void) {
     	{
     		error("HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig)");
     	}
+    	f1=f;
     } else if(f!=f2){
     	htim5.Instance = TIM5;
     	htim5.Init.Prescaler = prescale;
@@ -188,6 +192,7 @@ void cmd_pwm(void) {
     	{
     		error("HAL_TIMEx_MasterConfigSynchronization(&htim5, &sMasterConfig)");
     	}
+    	f2=f;
     }
 
     // this is channel 1
@@ -205,7 +210,12 @@ void cmd_pwm(void) {
               error("HAL_TIM_PWM_ConfigChannel");
             }
             GPIO_InitStruct.Pin = PWM_1A_Pin;
-            GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+			if (f<0){
+				//testing to allow config for Open Drain.
+			    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD; //'OPEN DRAIN
+			}else{
+			   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+			}
             GPIO_InitStruct.Pull = GPIO_NOPULL;
             GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
             GPIO_InitStruct.Alternate = GPIO_AF2_TIM4;
@@ -234,7 +244,12 @@ void cmd_pwm(void) {
                   error("HAL_TIM_PWM_ConfigChannel");
                 }
                 GPIO_InitStruct.Pin = PWM_1B_Pin;
-                GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    			if (f<0){
+    				//testing to allow config for Open Drain.
+    			    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD; //'OPEN DRAIN
+    			}else{
+    			   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    			}
                 GPIO_InitStruct.Pull = GPIO_NOPULL;
                 GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
                 GPIO_InitStruct.Alternate = GPIO_AF2_TIM4;
@@ -262,7 +277,12 @@ void cmd_pwm(void) {
                   error("HAL_TIM_PWM_ConfigChannel");
                 }
                 GPIO_InitStruct.Pin = PWM_1C_Pin;
-                GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    			if (f<0){
+    				//testing to allow config for Open Drain.
+    			    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD; //'OPEN DRAIN
+    			}else{
+    			   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    			}
                 GPIO_InitStruct.Pull = GPIO_NOPULL;
                 GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
                 GPIO_InitStruct.Alternate = GPIO_AF2_TIM4;
@@ -288,7 +308,12 @@ void cmd_pwm(void) {
                   error("HAL_TIM_PWM_ConfigChannel");
                 }
                 GPIO_InitStruct.Pin = PWM_1D_Pin;
-                GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    			if (f<0){
+    				//testing to allow config for Open Drain.
+    			    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD; //'OPEN DRAIN
+    			}else{
+    			   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    			}
                 GPIO_InitStruct.Pull = GPIO_NOPULL;
                 GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
                 GPIO_InitStruct.Alternate = GPIO_AF2_TIM4;
@@ -317,7 +342,12 @@ void cmd_pwm(void) {
               error("HAL_TIM_PWM_ConfigChannel");
             }
             GPIO_InitStruct.Pin = PWM_2A_Pin;
-            GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+			if (f<0){
+				//testing to allow config for Open Drain.
+			    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD; //'OPEN DRAIN
+			}else{
+			   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+			}
             GPIO_InitStruct.Pull = GPIO_NOPULL;
             GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
             GPIO_InitStruct.Alternate = GPIO_AF2_TIM5;
@@ -346,7 +376,12 @@ void cmd_pwm(void) {
                   error("HAL_TIM_PWM_ConfigChannel");
                 }
                 GPIO_InitStruct.Pin = PWM_2B_Pin;
-                GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    			if (f<0){
+    				//testing to allow config for Open Drain.
+    			    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD; //'OPEN DRAIN
+    			}else{
+    			   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    			}
                 GPIO_InitStruct.Pull = GPIO_NOPULL;
                 GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
                 GPIO_InitStruct.Alternate = GPIO_AF2_TIM5;
@@ -374,7 +409,12 @@ void cmd_pwm(void) {
                   error("HAL_TIM_PWM_ConfigChannel");
                 }
                 GPIO_InitStruct.Pin = PWM_2C_Pin;
-                GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    			if (f<0){
+    				//testing to allow config for Open Drain.
+    			    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD; //'OPEN DRAIN
+    			}else{
+    			   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    			}
                 GPIO_InitStruct.Pull = GPIO_NOPULL;
                 GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
                 GPIO_InitStruct.Alternate = GPIO_AF2_TIM5;
@@ -402,7 +442,12 @@ void cmd_pwm(void) {
                   error("HAL_TIM_PWM_ConfigChannel");
                 }
                 GPIO_InitStruct.Pin = PWM_2D_Pin;
-                GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    			if (f<0){
+    				//testing to allow config for Open Drain.
+    			    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD; //'OPEN DRAIN
+    			}else{
+    			   GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    			}
                 GPIO_InitStruct.Pull = GPIO_NOPULL;
                 GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
                 GPIO_InitStruct.Alternate = GPIO_AF2_TIM5;

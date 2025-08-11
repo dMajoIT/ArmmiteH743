@@ -101,12 +101,22 @@ extern TIM_HandleTypeDef htim3;
 extern TIM_HandleTypeDef htim6;
 extern TIM_HandleTypeDef htim7;
 extern TIM_HandleTypeDef htim13;
-uint64_t *d1point=NULL, *d2point=NULL;
+//uint64_t *d1point=NULL, *d2point=NULL;
+//int d1max, d2max;
+int64_t *d1point=NULL, *d2point=NULL;
 int d1max, d2max;
 volatile int d1pos, d2pos;
-volatile uint64_t * volatile  a1point=NULL, * volatile a2point=NULL, *volatile  a3point=NULL;
+//volatile uint64_t * volatile  a1point=NULL, * volatile a2point=NULL, *volatile  a3point=NULL;
 volatile MMFLOAT * volatile a1float=NULL, * volatile a2float=NULL, * volatile a3float=NULL;
+
+int64_t *a1point=NULL, *a2point=NULL, *a3point=NULL;
+//MMFLOAT *a1float=NULL, *a2float=NULL, *a3float=NULL;
+extern MMFLOAT ADCscale[3], ADCbottom[3];
+MMFLOAT ADCscale[3], ADCbottom[3];
+extern const MMFLOAT ADCdiv[];
+
 int ADCmax=0;
+int ADCScaled;
 volatile int ADCpos=0;
 extern int ADC_init(int32_t pin, int fast);
 extern ADC_HandleTypeDef hadc1;
@@ -116,6 +126,7 @@ volatile int ADCchannelA=0;
 volatile int ADCchannelB=0;
 volatile int ADCchannelC=0;
 int ADCtriggervalue=0;
+int ADCtriggertimeout=0;
 int ADCtriggerchannel=0;
 int ADCnegativeslope=0;
 char *ADCInterrupt;
@@ -428,17 +439,7 @@ void cmd_turtle(void){
 
 }
 */
-void dacclose(void){
-	CurrentlyPlaying=P_NOTHING;
-	if(d1max){
-		HAL_TIM_Base_Stop(&htim6);
-		HAL_TIM_Base_DeInit(&htim6);
-	}
-    HAL_DAC_SetValue(&hdac1,DAC_CHANNEL_1, DAC_ALIGN_12B_R, 2000);
-    HAL_DAC_SetValue(&hdac1,DAC_CHANNEL_2, DAC_ALIGN_12B_R, 2000);
-	d1max=0;
-	d2max=0;
-}
+
 //#ifndef STM32F4version
 void ADCclose(void){
 	if(ADCchannelA){
@@ -467,7 +468,7 @@ void ADCclose(void){
 		}
 		ExtCfg(ADCchannelC, EXT_NOT_CONFIG, 0);
 	}
-	ADCchannelA = ADCchannelB = ADCchannelC = ADCtriggerchannel = ADCNumchannels = ADCpos = ADCmax = 0;
+	ADCchannelA = ADCchannelB = ADCchannelC = ADCtriggerchannel = ADCNumchannels = ADCpos = ADCmax = ADCScaled=0;
 	ADCInterrupt=NULL;
 	ADCcomplete = false;
 }
@@ -479,10 +480,7 @@ void cmd_ADC(void){
 	ADC_ChannelConfTypeDef sConfigA, sConfigB, sConfigC;
 	int ADCb,a,b,c;
     MMFLOAT freq=0.0;
-    void *ptr1 = NULL;
-    void *ptr2 = NULL;
-    void *ptr3 = NULL;
-	tp = checkstring(cmdline, "OPEN");
+   	tp = checkstring(cmdline, "OPEN");
 	if(tp) {
      	getargs(&tp, 9, ",");
      	if(argc<3)error("Syntax");
@@ -490,7 +488,7 @@ void cmd_ADC(void){
         memset(&sConfigA,0,sizeof(ADC_ChannelConfTypeDef));
     	memset(&sConfigB,0,sizeof(ADC_ChannelConfTypeDef));
     	memset(&sConfigC,0,sizeof(ADC_ChannelConfTypeDef));
-    	ADCchannelB = ADCchannelC = 0;
+    	ADCchannelA=ADCchannelB = ADCchannelC = 0;
     	if(argc == 9) {
         	InterruptUsed = true;
         	ADCInterrupt = GetIntAddress(argv[8]);							// get the interrupt location
@@ -516,12 +514,23 @@ void cmd_ADC(void){
     	prescale*=2;
     	prescale--;
 
-    	ADCchannelA=0;
-    	if(argc>3 && *argv[4])ADCchannelB=getint(argv[4],0,NBRPINS);
-    	if(argc>5 && *argv[6])ADCchannelC=getint(argv[6],0,NBRPINS);
+    	char code;
+    	if((code=codecheck(argv[2])))argv[2]+=2;
     	ADCchannelA=getint(argv[2],0,NBRPINS);
+    	if(code)ADCchannelA=codemap(code, ADCchannelA);
 
-    	if(PinDef[ADCchannelA].ADC!=ADC1){
+    	if(argc>3 && *argv[4]){
+       	   if((code=codecheck(argv[4])))argv[4]+=2;
+    	   ADCchannelB=getint(argv[4],0,NBRPINS);
+    	   if(code)ADCchannelB=codemap(code, ADCchannelB);
+    	}
+       	if(argc>5 && *argv[6]){
+       	  if((code=codecheck(argv[6])))argv[6]+=2;
+    	  ADCchannelC=getint(argv[6],0,NBRPINS);
+    	  if(code)ADCchannelC=codemap(code, ADCchannelC);
+    	}
+
+       	if(PinDef[ADCchannelA].ADC!=ADC1){
     	   ADCchannelA = ADCchannelB = ADCchannelC = 0;
     	   error("First channel must use ANALOG_A pin");
     	}
@@ -613,49 +622,59 @@ void cmd_ADC(void){
 
 	tp = checkstring(cmdline, "START");
 	if(tp) {
-     	getargs(&tp, 5, ",");
+     	//getargs(&tp, 5, ",");
+     	getargs(&tp, 17, ",");
 		if(!ADCchannelA)error("ADC not open");
         if(!(argc >= 1))error("Argument count");
-        a1point=NULL; a2point=NULL; a3point=NULL;
+        //a1point=NULL; a2point=NULL; a3point=NULL;
         a1float=NULL; a2float=NULL; a3float=NULL;
         ADCmax=0;
         ADCpos=0;
-        ptr1 = findvar(argv[0], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-        if(vartbl[VarIndex].type & T_NBR) {
-            if(vartbl[VarIndex].dims[1] != 0) error("Invalid variable");
-            if(vartbl[VarIndex].dims[0] <= 0) {		// Not an array
-                error("Argument 1 must be float array");
-            }
-            a1point = (uint64_t *)ptr1;
-            a1float = (MMFLOAT *)ptr1;
-        } else error("Argument 1 must be float array");
-        ADCmax=(vartbl[VarIndex].dims[0] - OptionBase);
-        if(argc>=3){
+        ADCScaled=0;
+        MMFLOAT top;
+
+        ADCscale[0]= VCC/ADCdiv[ADCbits[ADCchannelA]];
+        ADCscale[1]= VCC/ADCdiv[ADCbits[ADCchannelB]];
+        ADCscale[2]= VCC/ADCdiv[ADCbits[ADCchannelC]];
+        ADCbottom[0]=0;
+        ADCbottom[1]=0;
+        ADCbottom[2]=0;
+
+        int card;
+        ADCmax=parsefloatrarray(argv[0], (MMFLOAT **)&a1float, 1, 1, NULL, true)-1;
+        a1point = (int64_t *)a1float;
+        if(argc>=3 && *argv[2]){
            if(!ADCchannelB)error("Second channel not open");
-           ptr2 = findvar(argv[2], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-            if(vartbl[VarIndex].type & T_NBR) {
-                if(vartbl[VarIndex].dims[1] != 0) error("Invalid variable");
-                if(vartbl[VarIndex].dims[0] <= 0) {		// Not an array
-                    error("Argument 2 must be float array");
-                }
-                a2point = (uint64_t *)ptr2;
-                a2float = (MMFLOAT *)ptr2;
-            } else error("Argument 2 must be float array");
-            if((vartbl[VarIndex].dims[0] - OptionBase) !=ADCmax)error("Arrays should be the same size");
+           card=parsefloatrarray(argv[2], (MMFLOAT **)&a2float, 2, 1, NULL, true)-1;
+           if(card!=ADCmax)error("Array size mismatch %,%",card, ADCmax);
+           a2point = (int64_t *)a2float;
         }
-        if(argc>=5){
-           if(!ADCchannelC)error("Third channel not open");
-           ptr3 = findvar(argv[4], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-            if(vartbl[VarIndex].type & T_NBR) {
-                if(vartbl[VarIndex].dims[1] != 0) error("Invalid variable");
-                if(vartbl[VarIndex].dims[0] <= 0) {		// Not an array
-                    error("Argument 3 must be float array");
-                }
-                a3point = (uint64_t *)ptr3;
-                a3float = (MMFLOAT *)ptr3;
-            } else error("Argument 3 must be float array");
-            if((vartbl[VarIndex].dims[0] - OptionBase) !=ADCmax)error("Arrays should be the same size");
+        if(argc>=5 && *argv[4]){
+            if(!ADCchannelC)error("Third channel not open");
+            card=parsefloatrarray(argv[4], (MMFLOAT **)&a3float, 3, 1, NULL, true)-1;
+            if(card!=ADCmax)error("Array size mismatch %,%",card, ADCmax);
+            a3point = (int64_t *)a3float;
         }
+        if(argc>=9){
+            ADCbottom[0]=getnumber(argv[6]);
+            top=getnumber(argv[8]);
+            ADCscale[0]= (top-ADCbottom[0])/ADCdiv[ADCbits[ADCchannelA]];
+            ADCScaled=1;
+        }
+        if(argc>=13){
+            ADCbottom[1]=getnumber(argv[10]);
+            top=getnumber(argv[12]);
+            ADCscale[1]= (top-ADCbottom[1])/ADCdiv[ADCbits[ADCchannelB]];
+        }
+        if(argc>=17){
+            ADCbottom[2]=getnumber(argv[14]);
+            top=getnumber(argv[16]);
+            ADCscale[2]= (top-ADCbottom[2])/ADCdiv[ADCbits[ADCchannelC]];
+        }
+
+
+
+
 		if (HAL_ADC_Start(&hadc1) != HAL_OK)
 		{
 			/* Start Conversation Error */
@@ -683,6 +702,7 @@ void cmd_ADC(void){
     			CheckAbort();
     		    CheckSDCard();
     		}
+
  		}
     	return;
 	}
@@ -695,8 +715,8 @@ void cmd_ADC(void){
 	tp = checkstring(cmdline, "TRIGGER");
 	if(tp) {
 		MMFLOAT voltage;
-     	getargs(&tp, 3, ",");
-     	if(argc!=3)error("Syntax");
+     	getargs(&tp, 5, ",");
+     	if(argc!=3 && argc!=5)error("Syntax");
      	ADCtriggerchannel=getint(argv[0],1,ADCNumchannels);
     	voltage = getnumber(argv[2]);
     	if(voltage<=-VCC || voltage >=VCC) error("Invalid Voltage");
@@ -706,6 +726,12 @@ void cmd_ADC(void){
     		voltage=-voltage;
     	}
 		ADCtriggervalue=(int)(voltage/VCC*65535);
+		//ADCtriggervalue=(int)(voltage/VCC*ADCdiv[ADCbits[ADCchannelA]]);
+		if(argc==5 && *argv[4]){
+		     ADCtriggertimeout = getnumber(argv[4]);
+		}else{
+		     ADCtriggertimeout =0;
+		}
     	return;
 	}
 	tp = checkstring(cmdline, "FREQUENCY");
@@ -737,14 +763,26 @@ void cmd_ADC(void){
 	}
 }
 //#endif
+void dacclose(void){
+	CurrentlyPlaying=P_NOTHING;
+	if(d1max){
+		HAL_TIM_Base_Stop(&htim6);
+		HAL_TIM_Base_DeInit(&htim6);
+	}
+    HAL_DAC_SetValue(&hdac1,DAC_CHANNEL_1, DAC_ALIGN_12B_R, 2000);
+    HAL_DAC_SetValue(&hdac1,DAC_CHANNEL_2, DAC_ALIGN_12B_R, 2000);
+	d1max=0;
+	d2max=0;
+}
+
 void cmd_DAC(void){
 	char *tp;
     int channel;
     uint16_t dacvalue;
     float voltage;
     MMFLOAT freq;
-    void *ptr1 = NULL;
-    void *ptr2 = NULL;
+   // void *ptr1 = NULL;
+   // void *ptr2 = NULL;
     int  prescale, period;
     tp = checkstring(cmdline, "STOP");
     if(tp){
@@ -763,6 +801,13 @@ void cmd_DAC(void){
         d2max=0;
         d1pos=0;
         d2pos=0;
+        d1max=parseintegerarray(argv[2],&d1point,1,1, NULL, false)-1;
+               //PInt(d1max);
+        if(argc==5){
+            d2max=parseintegerarray(argv[4],&d2point,2,1, NULL, false)-1;
+              // PInt(d2max);
+        }
+        /*
         ptr1 = findvar(argv[2], V_FIND | V_EMPTY_OK);
         if(vartbl[VarIndex].type & T_INT) {
             if(vartbl[VarIndex].dims[1] != 0) error("Invalid variable");
@@ -783,6 +828,7 @@ void cmd_DAC(void){
             } else error("Argument 3 must be integer array");
             d2max=(vartbl[VarIndex].dims[0] - OptionBase);
         }
+        */
     	if(argc == 7) {
     		DACcomplete = false;
     		InterruptUsed = true;

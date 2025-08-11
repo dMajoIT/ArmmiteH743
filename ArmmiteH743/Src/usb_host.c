@@ -69,23 +69,28 @@ static void USBH_UserProcess(USBH_HandleTypeDef *phost, uint8_t id);
 void MX_USB_HOST_Init(void)
 {
   /* USER CODE BEGIN USB_HOST_Init_PreTreatment */
-  
+	RCC->AHB1LPENR &= ~RCC_AHB1LPENR_USB2OTGHSULPILPEN;
   /* USER CODE END USB_HOST_Init_PreTreatment */
-  
+
   /* Init host Library, add supported class and start the library. */
   if (USBH_Init(&hUsbHostFS, USBH_UserProcess, HOST_FS) != USBH_OK)
   {
-	  _Error_Handler(__FILE__, __LINE__);
+	 // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
+
   }
   if (USBH_RegisterClass(&hUsbHostFS, USBH_HID_CLASS) != USBH_OK)
   {
-	  _Error_Handler(__FILE__, __LINE__);
+	  //_Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   if (USBH_Start(&hUsbHostFS) != USBH_OK)
   {
-	  _Error_Handler(__FILE__, __LINE__);
+	 // _Error_Handler(__FILE__, __LINE__);
+	  SystemError=1;Error_Handler();
   }
   /* USER CODE BEGIN USB_HOST_Init_PostTreatment */
+
   
   /* USER CODE END USB_HOST_Init_PostTreatment */
 }

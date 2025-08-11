@@ -89,15 +89,15 @@ extern volatile uint64_t Count5High;
 extern void disk_timerproc(void);
 extern TIM_HandleTypeDef htim10;
 extern int LCD_BL_Period;
-#ifdef STM32F4version
-	extern volatile BYTE SDCardStat;
-	volatile unsigned int SDtimer=1000, checkSD=0;
-	#include "usbd_cdc_if.h"
-	extern volatile int ConsoleTxBufHead;
-	extern volatile int ConsoleTxBufTail;
-	extern char ConsoleTxBuf[CONSOLE_TX_BUF_SIZE];
-	extern USBD_HandleTypeDef hUsbDeviceFS;
-#endif
+//#ifdef STM32F4version
+//	extern volatile BYTE SDCardStat;
+//	volatile unsigned int SDtimer=1000, checkSD=0;
+//	#include "usbd_cdc_if.h"
+//	extern volatile int ConsoleTxBufHead;
+//	extern volatile int ConsoleTxBufTail;
+//	extern char ConsoleTxBuf[CONSOLE_TX_BUF_SIZE];
+//	extern USBD_HandleTypeDef hUsbDeviceFS;
+//#endif
 
 /***************************************************************************************************
 InitTimers
@@ -111,6 +111,10 @@ if(processtick){
     int ElapsedMicroSec, IrDevTmp, IrCmdTmp;
 //    static unsigned int mSecCheck;
 //    static unsigned int BacklightCount;
+
+   // if((mSecTimer % 9)==0)USBtime=1; //trigger USB processing move to top as per CMM2
+    //if((mSecTimer % Option.USBPolling)==0)USBtime=1; //trigger USB processing from CMM2
+
 	/////////////////////////////// count up timers /////////////////////////////////////
 
 	// if we are measuring period increment the count
@@ -126,37 +130,12 @@ if(processtick){
     AHRSTimer++;
     if(CFuncmSec) CallCFuncmSec();                                  // the 1mS tick for CFunctions (see CFunction.c)
     keytimer++;
-#ifdef STM32F4version
-    SDtimer--;
-    if(SDtimer==0){
-    	SDtimer=1000;
-    	if(!(SDCardStat & STA_NOINIT))checkSD=1; //card supposed to be mounted so set a check
-    }
-    if((Timer4 % 16) == 0){ //process USB console output every 16 msec
-    	audio_checks();
-    	if(Option.SerialConDisabled){
-    		if(ConsoleTxBufHead!=ConsoleTxBufTail){
-    			if(ConsoleTxBufHead>ConsoleTxBufTail){
-    				if(CDC_Transmit_FS((uint8_t *)&ConsoleTxBuf[ConsoleTxBufTail],ConsoleTxBufHead-ConsoleTxBufTail ) != USBD_BUSY)ConsoleTxBufTail=ConsoleTxBufHead;
-    			} else {
-    				if(CDC_Transmit_FS((uint8_t *)&ConsoleTxBuf[ConsoleTxBufTail],CONSOLE_TX_BUF_SIZE-ConsoleTxBufTail ) != USBD_BUSY){
-    					ConsoleTxBufTail=0;
-    				}
-    			}
-    		}
-    	}
-    }
-    if(LCD_BL_Period){
-    	__HAL_TIM_SET_COUNTER(&htim10, 0);
-    	htim10.Instance->ARR=100-LCD_BL_Period;
-    	HAL_TIM_Base_Start_IT(&htim10);
-    	LL_GPIO_ResetOutputPin(PWM_1D_LCD_BL_GPIO_Port, PWM_1D_LCD_BL_Pin);
-    }
-#else
+
 	disk_timerproc();
 	audio_checks();
     if((mSecTimer % 9)==0)USBtime=1; //trigger USB processing
-#endif
+    //if((mSecTimer % Option.USBPolling)==0)USBtime=1; //trigger USB processing from CMM2
+
     Timer2--;
 	Timer1--;
     Timer3++;
