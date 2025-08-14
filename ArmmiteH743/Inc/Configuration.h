@@ -48,7 +48,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define CONFIG
 #include <math.h>
 // The MagicKey is used to force all Flash to be erased if new firmware has a different nMagicKey
-#define MagicKey 0x15642903   //Current H7 5.07.02
+//#define MagicKey 0x15642903   //Current H7 5.07.02
+#define MagicKey 0x1140825    //Current H7 5.08.00Beta0
 // The main clock frequency for the chip at bootup, it can be changed by the CPU command
 #define	CLOCKFREQ		(400000000L)			    // This is set in in Configuration Bits.h
 #define CONSOLE_BAUDRATE    115200

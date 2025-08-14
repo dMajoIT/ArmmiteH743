@@ -136,7 +136,8 @@ extern int VarIndex;                            // index of the current variable
 extern int LocalIndex;                          // used to track the level of local variables
 extern int emptyarray;
 extern int OptionBase;                          // value of OPTION BASE
-extern char OptionExplicit,OptionEscape;  // true if OPTION EXPLICIT has been used
+extern char OptionExplicit,OptionEscape,OptionConsole;  // true if OPTION EXPLICIT has been used
+extern char OptionNoCheck;
 extern char DefaultType;                        // the default type if a variable is not specifically typed
 extern char syscheck;
 extern int multi;
