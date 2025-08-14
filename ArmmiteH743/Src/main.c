@@ -866,7 +866,7 @@ if(Option.USBKeyboard != NO_KEYBOARD){
   initConsole();
   HAL_Delay(200);
   ErrorInPrompt = false;
-  if(!(_excep_code == RESTART_NOAUTORUN || _excep_code == RESET_COMMAND || _excep_code == WATCHDOG_TIMEOUT )){
+  if(!(_excep_code == RESTART_NOAUTORUN || _excep_code == RESET_COMMAND || _excep_code == SCREWUP_TIMEOUT || _excep_code == WATCHDOG_TIMEOUT )){
 	  if(Option.Autorun==0 ){
 #ifdef DIAG
        flashled(10,100);
@@ -922,6 +922,7 @@ if(Option.USBKeyboard != NO_KEYBOARD){
   if(setjmp(mark) != 0) {
 	  if(CurrentlyPlaying != P_NOTHING)CloseAudio(1);
       // we got here via a long jump which means an error or CTRL-C or the program wants to exit to the command prompt
+	  OptionConsole=3;
       ContinuePoint = nextstmt;                                   // in case the user wants to use the continue command
       *tknbuf = 0;                                                // we do not want to run whatever is in the token buffer
       //Options are reloaded on an error, so non permanent Options are set to default we need to reset any we really need.
@@ -973,7 +974,7 @@ if(Option.USBKeyboard != NO_KEYBOARD){
 		gui_bcolour = PromptBC;
 		if(CurrentX != 0) MMPrintString("\r\n");                   // prompt should be on a new line
 	}
-	MMAbort = false;
+	  MMAbort = false;
       BreakKey = BREAK_KEY;
       EchoOption = true;
       LocalIndex = 0;                                             // this should not be needed but it ensures that all space will be cleared
@@ -2778,8 +2779,11 @@ void SerialConsolePutC(int c) {
 	}
 }
 void putConsole(int c) {
-    SerialConsolePutC(c);
-    DisplayPutC(c);if(Option.Refresh)Display_Refresh();
+
+    if(OptionConsole & 1)SerialConsolePutC(c);
+    if(OptionConsole & 2){DisplayPutC(c);if(Option.Refresh)Display_Refresh();}
+    // SerialConsolePutC(c);
+    //DisplayPutC(c);if(Option.Refresh)Display_Refresh();
 }
 // get a char from the UART1 serial port (the console)
 // will return immediately with -1 if there is no character waiting

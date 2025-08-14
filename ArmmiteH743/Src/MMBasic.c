@@ -107,7 +107,8 @@ int Localvarcnt;                                                         // numb
 int Globalvarcnt;                                                         // number of GLOBAL variables
 int VarIndex;                                                       // Global set by findvar after a variable has been created or found
 int LocalIndex;                                                     // used to track the level of local variables
-char OptionExplicit,OptionEscape;                                   // used to force the declaration of variables before their use
+char OptionExplicit,OptionEscape,OptionConsole;                                   // used to force the declaration of variables before their use
+char OptionNoCheck=false;
 char DefaultType;                                                   // the default type if a variable is not specifically typed
 void hashlabels(char *p,int ErrAbort);
 char *subfun[MAXSUBFUN];                                            // table used to locate all subroutines and functions
@@ -409,8 +410,12 @@ void ExecuteProgram(char *p) {
                 }
                 if(OptionErrorSkip > 0) OptionErrorSkip--;          // if OPTION ERROR SKIP decrement the count - we do not error if it is greater than zero
                 if(TempMemoryIsChanged) ClearTempMemory();          // at the end of each command we need to clear any temporary string vars
-                CheckAbort();
-                check_interrupt();                                  // check for an MMBasic interrupt and handle it
+                //CheckAbort();
+                //check_interrupt();                                  // check for an MMBasic interrupt and handle it
+                if(!OptionNoCheck){
+                   CheckAbort();
+                   check_interrupt();                               // check for an MMBasic interrupt or touch event and handle it
+                }
             }
             p = nextstmt;
         }
@@ -3671,9 +3676,10 @@ void MIPS16 error(char *msg, ...) {
     if(OptionErrorSkip) longjmp(ErrNext, 1);                       // if OPTION ERROR SKIP/IGNORE is in force
 
     LoadOptions();                                                  // make sure that the option struct is in a clean state
-
+    OptionConsole=1;
     if(Option.DISPLAY_CONSOLE) {
-        SetFont(PromptFont);
+    	OptionConsole=3;
+    	SetFont(PromptFont);
         gui_fcolour = PromptFC;
         gui_bcolour = PromptBC;
         if(CurrentX != 0) MMPrintString("\r\n");                   // error message should be on a new line
@@ -3999,6 +4005,7 @@ void MIPS16 ClearRuntime(void) {
     restorepointer = 0;
     OptionExplicit = false;
     OptionEscape = false;
+    OptionConsole=3;
    // OptionChars = false;
     optionangle=1.0;
     DefaultType = T_NBR;

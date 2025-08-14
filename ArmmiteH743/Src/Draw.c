@@ -1888,6 +1888,61 @@ void cmd_rbox(void) {
     }
 }
 
+
+// this function positions the cursor within a PRINT command
+//If OPTION CHARS is set expects x,y as column and row else as pixels.
+void fun_at(void) {
+	char usechars=0;
+    char buf[27];
+	getargs(&ep, 7, ",");
+	if(commandfunction(cmdtoken) != cmd_print) error("Invalid function");
+//	if((argc == 3 || argc == 5)) error("Incorrect number of arguments");
+//	AutoLineWrap = false;
+
+	if(argc >= 7 && *argv[6]) {
+		usechars = getinteger(argv[6]);
+
+	}
+
+	CurrentX = getinteger(argv[0]);
+	if (usechars)CurrentX=(CurrentX-1)*gui_font_width;
+	//CurrentX = getinteger(argv[0]);
+
+
+	if(argc>=3  && *argv[2]){
+		CurrentY = getinteger(argv[2]);
+		if (usechars)CurrentY=(CurrentY-1)*gui_font_height;
+	}
+	//if (usechars)CurrentY=(CurrentY-1)*gui_font_height;
+
+	if(argc >= 5 && *argv[4]) {
+	    PrintPixelMode = getinteger(argv[4]);
+    	//if(PrintPixelMode < 0 || PrintPixelMode > 37) {
+    	if(PrintPixelMode < 0 || PrintPixelMode > 7) {
+       	PrintPixelMode = 0;
+       	error("Number out of bounds");
+       }
+    } else
+	  PrintPixelMode = 0;
+
+    // BJR: VT100 set cursor location: <esc>[y;xf
+	//      VT100 set cursor location: <esc>[yG  Only set y
+    //      where x and y are ASCII string integers.
+    //      Assumes overall font size of 6x12 pixels (480/80 x 432/36), including gaps between characters and lines
+	 sprintf(buf, "\033[%d;%df", (int)(CurrentY/gui_font_height)+1, (int)(CurrentX/gui_font_width)+1);
+	 SerUSBPutS(buf);
+
+	//PIntComma((CurrentX/gui_font_width)+1);PIntComma((CurrentY/gui_font_height)+1);
+
+   								                // send it to the USB
+	if(PrintPixelMode==2 || PrintPixelMode==5)SerUSBPutS("\033[7m");
+
+    targ=T_STR;
+    sret = "\0";                                                    // normally pointing sret to a string in flash is illegal
+}
+
+
+/*
 // this function positions the cursor within a PRINT command
 //If OPTION CHARS is set expects x,y as column and row else as pixels.
 void fun_at(void) {
@@ -1911,14 +1966,16 @@ void fun_at(void) {
 
 	}
 	if(argc>=3  && *argv[2]){
-		if(!nocol)CurrentY = getinteger(argv[2]);
+		//if(!nocol)CurrentY = getinteger(argv[2]);
+		CurrentY = getinteger(argv[2]);
 		if (usechars)CurrentY=(CurrentY-1)*gui_font_height;
 	}
 	//if (usechars)CurrentY=(CurrentY-1)*gui_font_height;
 
 	if(argc >= 5 && *argv[4]) {
 	    PrintPixelMode = getinteger(argv[4]);
-    	if(PrintPixelMode < 0 || PrintPixelMode > 37) {
+    	//if(PrintPixelMode < 0 || PrintPixelMode > 37) {
+    	if(PrintPixelMode < 0 || PrintPixelMode > 7) {
        	PrintPixelMode = 0;
        	error("Number out of bounds");
        }
@@ -1929,7 +1986,7 @@ void fun_at(void) {
 	//      VT100 set cursor location: <esc>[yG  Only set y
     //      where x and y are ASCII string integers.
     //      Assumes overall font size of 6x12 pixels (480/80 x 432/36), including gaps between characters and lines
-	if(!nocol){
+   if(!nocol){
 		if (((CurrentY/gui_font_height )< Option.Height) || noarg6){
 		  sprintf(buf, "\033[%d;%df", (int)(CurrentY/gui_font_height)+1, (int)(CurrentX/gui_font_width)+1);
 		  SerUSBPutS(buf);
@@ -1946,23 +2003,17 @@ void fun_at(void) {
      // sprintf(buf, "\033[%d;%df", (int)CurrentY/(FontTable[gui_font >> 4][1] * (gui_font & 0b1111))+1, (int)CurrentX/(FontTable[gui_font >> 4][0] * (gui_font & 0b1111))+1);
      // SerUSBPutS(buf);
 	//}
+	//PIntComma((CurrentX/gui_font_width)+1);PIntComma((CurrentY/gui_font_height)+1);
+
    								                // send it to the USB
 	if(PrintPixelMode==2 || PrintPixelMode==5)SerUSBPutS("\033[7m");
-	if(PrintPixelMode==31)SerUSBPutS("\033[30m"); //BLACK
-	if(PrintPixelMode==31)SerUSBPutS("\033[31m"); //RED
-	if(PrintPixelMode==32)SerUSBPutS("\033[32m"); //GREEN
-	if(PrintPixelMode==33)SerUSBPutS("\033[33m"); //YELLOW
-	if(PrintPixelMode==34)SerUSBPutS("\033[34m"); //BLUE
-	if(PrintPixelMode==35)SerUSBPutS("\033[35m"); //MAGENTA
-	if(PrintPixelMode==36)SerUSBPutS("\033[36m"); //CYAN
-	if(PrintPixelMode==37)SerUSBPutS("\033[37m"); //WHITE
+
     targ=T_STR;
     sret = "\0";                                                    // normally pointing sret to a string in flash is illegal
 }
-
+*/
 /*
 // this function positions the cursor within a PRINT command
-//If OPTION CHARS is set expects x,y as column and row else as pixels.
 void fun_at(void) {
     char buf[27];
 	getargs(&ep, 5, ",");
@@ -1970,19 +2021,15 @@ void fun_at(void) {
 //	if((argc == 3 || argc == 5)) error("Incorrect number of arguments");
 //	AutoLineWrap = false;
 	CurrentX = getinteger(argv[0]);
-	'if(OptionChars)CurrentX=(CurrentX-1)*(FontTable[gui_font >> 4][0] * (gui_font & 0b1111));
-	if(argc>=3  && *argv[2]){
-		CurrentY = getinteger(argv[2]);
-		'if(OptionChars)CurrentY=(CurrentY-1)*(FontTable[gui_font >> 4][1] * (gui_font & 0b1111));
-	}
+	if(argc>=3  && *argv[2])CurrentY = getinteger(argv[2]);
 	if(argc == 5) {
 	    PrintPixelMode = getinteger(argv[4]);
     	if(PrintPixelMode < 0 || PrintPixelMode > 7) {
-       	PrintPixelMode = 0;
-       	error("Number out of bounds");
-       }
+        	PrintPixelMode = 0;
+        	error("Number out of bounds");
+        }
     } else
-	  PrintPixelMode = 0;
+	    PrintPixelMode = 0;
 
     // BJR: VT100 set cursor location: <esc>[y;xf
     //      where x and y are ASCII string integers.
@@ -1994,6 +2041,7 @@ void fun_at(void) {
     targ=T_STR;
     sret = "\0";                                                    // normally pointing sret to a string in flash is illegal
 }
+
 */
 
 // these three functions were written by Peter Mather (matherp on the Back Shed forum)

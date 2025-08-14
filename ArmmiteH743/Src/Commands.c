@@ -922,6 +922,7 @@ void cmd_else(void) {
 void cmd_end(void) {
 	checkend(cmdline);
     memset(inpbuf,0,STRINGSIZE);
+    OptionConsole=3;
 	longjmp(mark, 1);												// jump back to the input prompt
 }
 

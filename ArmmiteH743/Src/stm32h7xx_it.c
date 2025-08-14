@@ -99,7 +99,7 @@ extern volatile uint64_t uSecTimer;
 extern volatile uint8_t FlashDone;
 extern volatile uint64_t uSecTimer;
 extern volatile uint64_t FastTimer;
-extern uint8_t OptionConsole;
+//extern uint8_t OptionConsole;
 extern volatile uint8_t FlashDone;
 extern volatile int sound_v_left[MAXSOUNDS];
 extern volatile int sound_v_right[MAXSOUNDS];

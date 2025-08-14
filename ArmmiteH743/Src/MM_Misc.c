@@ -2355,7 +2355,12 @@ void cmd_settick(void){
 
 void cmd_option(void) {
 	char *tp;
-
+	tp = checkstring(cmdline, "NOCHECK");
+	if(tp) {
+		if(checkstring(tp, "ON"))	{ OptionNoCheck=true; return; }
+		if(checkstring(tp, "OFF"))	{ OptionNoCheck=false; return; }
+        return;
+	}
 	tp = checkstring(cmdline, "BASE");
 	if(tp) {
 		if(DimUsed) error("Must be before DIM or LOCAL");
@@ -2366,6 +2371,15 @@ void cmd_option(void) {
 	    if(tp) {
 	        OptionEscape = true;
 	        return;
+	}
+    tp = checkstring(cmdline, "CONSOLE");
+	   if(tp) {
+	      if(checkstring(tp, "BOTH"))OptionConsole=3;
+	      else if(checkstring(tp, "SERIAL"))OptionConsole=1;
+	      else if(checkstring(tp, "SCREEN"))OptionConsole=2;
+	      else if(checkstring(tp,"NONE"))OptionConsole=0;
+	      else error("Syntax");
+	      return;
 	}
 	//tp = checkstring(cmdline, "CHARS");
 	//    if(tp) {
