@@ -51,6 +51,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "upng.h"
 //#include "xregex.h"
 #include "re.h"
+#include "aes.h"
 
 struct s_inttbl inttbl[NBRINTERRUPTS];
 extern char *InterruptReturn;
@@ -97,6 +98,16 @@ extern volatile int DACcomplete;
 //extern char *GetCWD(void);
 extern int codemap(char code, int pin);
 extern int codecheck(char *line);
+
+extern uint8_t getrnd(void);
+//extern uint32_t restart_reason;
+extern unsigned int b64d_size(unsigned int in_size);
+extern unsigned int b64e_size(unsigned int in_size);
+extern unsigned int b64_encode(const unsigned char* in, unsigned int in_len, unsigned char* out);
+extern unsigned int b64_decode(const unsigned char* in, unsigned int in_len, unsigned char* out);
+void parselongAES(char *p, int ivadd, uint8_t *keyx, uint8_t *ivx, int64_t **inint, int64_t **outint);
+
+
 MMFLOAT optionangle=1.0;
 
 void  setterminal(int height,int width);
@@ -773,8 +784,6 @@ void cmd_pause(void) {
 }
 
 
-#ifndef PREPARSE
-//void MIPS16 cmd_longString(void){
 void cmd_longString(void){
     char *tp;
     tp = checkstring(cmdline, (char *)"SETBYTE");
@@ -1048,8 +1057,187 @@ void cmd_longString(void){
         dest[0]+=src[0];
         return;
     }
+    //unsigned char * parselongAES(uint8_t *p, int ivadd, uint8_t *keyx, uint8_t *ivx, int64_t **inint, int64_t **outint)
+        tp = checkstring(cmdline, "AES128");
+        if(tp) {
+            struct AES_ctx ctx;
+            unsigned char keyx[16];
+            char * p;
+            int64_t *dest=NULL, *src=NULL;
+            char *qq=NULL;
+            char *q=NULL;
+    //void parselongAES(uint8_t *p, int ivadd, uint8_t *keyx, uint8_t *ivx, int64_t **inint, int64_t **outint){
+            if((p=checkstring(tp, "ENCRYPT CBC"))){
+                uint8_t iv[16];
+                for(int i=0;i<16;i++)iv[i]=getrnd();
+                parselongAES(p, 16, &keyx[0], &iv[0], &src, &dest);
+                qq=(char *)&src[1];
+                q=(char *)&dest[1];
+                dest[0]=src[0]+16;
+                memcpy(&q[16],qq,src[0]);
+                memcpy(q,iv,16);
+                AES_init_ctx_iv(&ctx, keyx, iv);
+                AES_CBC_encrypt_buffer(&ctx, (unsigned char *)&q[16], src[0]);
+                return;
+            } else if((p=checkstring(tp,"DECRYPT CBC"))){
+                uint8_t iv[16];
+                parselongAES(p, -16, &keyx[0], NULL, &src, &dest);
+                dest[0]=src[0]-16;
+                qq=(char *)&src[1];
+                q=(char *)&dest[1];
+                memcpy(iv,qq,16); //restore the IV
+                memcpy(q,&qq[16],dest[0]);
+                AES_init_ctx_iv(&ctx, keyx, iv);
+                AES_CBC_decrypt_buffer(&ctx, (unsigned char *)q, dest[0]);
+                return;
+            } else if((p=checkstring(tp,"ENCRYPT ECB"))){
+                struct AES_ctx ctxcopy;
+                parselongAES(p, 0, &keyx[0], NULL, &src, &dest);
+                qq=(char *)&src[1];
+                q=(char *)&dest[1];
+                dest[0]=src[0];
+                memcpy(q,qq,src[0]);
+                AES_init_ctx(&ctxcopy, keyx);
+                for(int i=0;i<src[0];i+=16){
+                    memcpy(&ctx,&ctxcopy,sizeof(ctx));
+                    AES_ECB_encrypt(&ctx, (unsigned char *)&q[i]);
+                }
+                return;
+            } else if((p=checkstring(tp, "DECRYPT ECB"))){
+                struct AES_ctx ctxcopy;
+                parselongAES(p, 0, &keyx[0], NULL, &src, &dest);
+                qq=(char *)&src[1];
+                q=(char *)&dest[1];
+                dest[0]=src[0];
+                memcpy(q,qq,src[0]);
+                AES_init_ctx(&ctxcopy, keyx);
+                for(int i=0;i<src[0];i+=16){
+                    memcpy(&ctx,&ctxcopy,sizeof(ctx));
+                    AES_ECB_decrypt(&ctx, (unsigned char *)&q[i]);
+                }
+                return;
+            } else if((p=checkstring(tp, "ENCRYPT CTR"))){
+                uint8_t iv[16];
+                for(int i=0;i<16;i++)iv[i]=getrnd();
+                parselongAES(p, 16, &keyx[0], &iv[0], &src, &dest);
+                qq=(char *)&src[1];
+                q=(char *)&dest[1];
+                dest[0]=src[0]+16;
+                memcpy(&q[16],qq,src[0]);
+                memcpy(q,iv,16);
+                AES_init_ctx_iv(&ctx, keyx, iv);
+                AES_CTR_xcrypt_buffer(&ctx, (unsigned char *)&q[16], src[0]);
+                return;
+            } else if((p=checkstring(tp, "DECRYPT CTR"))){
+                uint8_t iv[16];
+                parselongAES(p, -16, &keyx[0], NULL, &src, &dest);
+                dest[0]=src[0]-16;
+                qq=(char *)&src[1];
+                q=(char *)&dest[1];
+                memcpy(iv,qq,16); //restore the IV
+                memcpy(q,&qq[16],dest[0]);
+                AES_init_ctx_iv(&ctx, keyx, iv);
+                AES_CTR_xcrypt_buffer(&ctx, (unsigned char *)q, dest[0]);
+                return;
+            } else error("Syntax");
+        }
+        tp = checkstring(cmdline,"BASE64");
+        if(tp) {
+            char * p;
+            if((p=checkstring(tp, "ENCODE"))){
+                int64_t *dest=NULL, *src=NULL;
+                unsigned char *qq=NULL;
+                unsigned char *q=NULL;
+                int j;
+                getargs(&p, 3, ",");
+                if(argc != 3)error("Argument count");
+                j=parseintegerarray(argv[2],&dest,2,1,NULL,true)-1;
+                q=(unsigned char *)&dest[1];
+                parseintegerarray(argv[0],&src,1,1,NULL,false);
+                qq=(unsigned char *)&src[1];
+                if(j*8 < b64e_size(src[0]))error("Destination array too small");
+                dest[0]=b64_encode(qq, src[0], q);
+                return;
+            } else if((p=checkstring(tp, "DECODE"))){
+                int64_t *dest=NULL, *src=NULL;
+                unsigned char *qq=NULL;
+                unsigned char *q=NULL;
+                int j;
+                getargs(&p, 3,",");
+                if(argc != 3)error("Argument count");
+                j=parseintegerarray(argv[2],&dest,2,1,NULL,true)-1;
+                q=(unsigned char *)&dest[1];
+                parseintegerarray(argv[0],&src,1,1,NULL,false);
+                qq=(unsigned char *)&src[1];
+                if(j*8 < b64d_size(src[0]))error("Destination array too small");
+                dest[0]=b64_decode(qq, src[0], q);
+                return;
+            } else error("Syntax");
+        }
     error("Invalid option");
 }
+
+void parselongAES(char *p, int ivadd, uint8_t *keyx, uint8_t *ivx, int64_t **inint, int64_t **outint){
+	int64_t *a1int=NULL, *a2int=NULL, *a3int=NULL, *a4int=NULL;
+	unsigned char *a1str=NULL,*a4str=NULL;
+	MMFLOAT *a1float=NULL, *a4float=NULL;
+	int card1, card3;
+	getargs(&p,7,",");
+	if(ivx==NULL){
+		if(argc!=5)error("Syntax");
+	} else {
+		if(argc<5)error("Syntax");
+	}
+	*outint=NULL;
+// first process the key
+	int length=0;
+	card1= parseany(argv[0], &a1float, &a1int, &a1str, &length, false);
+	if(card1!=16)error("Key must be 16 elements long");
+	if(a1int!=NULL){
+		for(int i=0;i<16;i++){
+			if(a1int[i]<0 || a1int[i]>255)error("Key number out of bounds 0-255");
+			keyx[i]=a1int[i];
+		}
+	} else if (a1float!=NULL){
+		for(int i=0;i<16;i++){
+			if(a1float[i]<0 || a1float[i]>255)error("Key number out of bounds 0-255");
+			keyx[i]=a1float[i];
+		}
+	} else if(a1str!=NULL){
+		for(int i=0;i<16;i++){
+			keyx[i]=a1str[i+1];
+		}
+	}
+//next process the initialisation vector if any
+	if(argc==7){
+		length=0;
+		card1= parseany(argv[6], &a4float, &a4int, &a4str, &length, false);
+		if(card1!=16)error("Initialisation vector must be 16 elements long");
+		if(a4int!=NULL){
+			for(int i=0;i<16;i++){
+				if(a4int[i]<0 || a4int[i]>255)error("Key number out of bounds 0-255");
+				ivx[i]=a4int[i];
+			}
+		} else if (a4float!=NULL){
+			for(int i=0;i<16;i++){
+				if(a4float[i]<0 || a4float[i]>255)error("Key number out of bounds 0-255");
+				ivx[i]=a4float[i];
+			}
+		} else if(a4str!=NULL){
+			for(int i=0;i<16;i++){
+				ivx[i]=a4str[i+1];
+			}
+		}
+	}
+//now process the longstring used for input
+	parseintegerarray(argv[2],&a2int,2,1,NULL,false);
+	if(*a2int % 16)error("input must be multiple of 16 elements long");
+    *inint=a2int;
+	card3=parseintegerarray(argv[4],&a3int,3,1,NULL,false);
+	if((card3-1)*8<*a2int + ivadd)error("Output array too small");
+    *outint=a3int;
+}
+
 void fun_LGetStr(void){
         char *p;
         char *s=NULL;
@@ -1256,7 +1444,7 @@ void fun_LLen(void) {
     iret=dest[0];
     targ = T_INT;
 }
-#endif
+
 
 
 #ifdef PREPARSE

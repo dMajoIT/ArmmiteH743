@@ -45,8 +45,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "Hardware_Includes.h"
 #include <math.h>
 #include <complex.h>
+#define CBC 1
+#define CTR 1
+#define ECB 1
+#include "aes.h"
 extern MMFLOAT PI;
 extern long long int GetuSec(void);
+extern RNG_HandleTypeDef hrng;
 typedef MMFLOAT complex cplx;
 typedef float complex fcplx;
 void cmd_FFT(char *pp);
@@ -111,6 +116,107 @@ MMFLOAT eInt[3]={0,0,0};
 MMFLOAT determinant(MMFLOAT **matrix,int size);
 void transpose(MMFLOAT **matrix,MMFLOAT **matrix_cofactor,MMFLOAT **newmatrix, int size);
 void cofactor(MMFLOAT **matrix,MMFLOAT **newmatrix,int size);
+
+unsigned char b64_chr[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+unsigned int b64_int(unsigned int ch) {
+
+	// ASCII to base64_int
+	// 65-90  Upper Case  >>  0-25
+	// 97-122 Lower Case  >>  26-51
+	// 48-57  Numbers     >>  52-61
+	// 43     Plus (+)    >>  62
+	// 47     Slash (/)   >>  63
+	// 61     Equal (=)   >>  64~
+	if (ch==43)
+	return 62;
+	if (ch==47)
+	return 63;
+	if (ch==61)
+	return 64;
+	if ((ch>47) && (ch<58))
+	return ch + 4;
+	if ((ch>64) && (ch<91))
+	return ch - 'A';
+	if ((ch>96) && (ch<123))
+	return (ch - 'a') + 26;
+	return 0;
+}
+
+unsigned int b64e_size(unsigned int in_size) {
+
+	// size equals 4*floor((1/3)*(in_size+2));
+	int i, j = 0;
+	for (i=0;i<in_size;i++) {
+		if (i % 3 == 0)
+		j += 1;
+	}
+	return (4*j);
+}
+
+unsigned int b64d_size(unsigned int in_size) {
+
+	return ((3*in_size)/4);
+}
+
+unsigned int b64_encode(const unsigned char* in, unsigned int in_len, unsigned char* out) {
+
+	unsigned int i=0, j=0, k=0, s[3];
+
+	for (i=0;i<in_len;i++) {
+		s[j++]=*(in+i);
+		if (j==3) {
+			out[k+0] = b64_chr[ (s[0]&255)>>2 ];
+			out[k+1] = b64_chr[ ((s[0]&0x03)<<4)+((s[1]&0xF0)>>4) ];
+			out[k+2] = b64_chr[ ((s[1]&0x0F)<<2)+((s[2]&0xC0)>>6) ];
+			out[k+3] = b64_chr[ s[2]&0x3F ];
+			j=0; k+=4;
+		}
+	}
+
+	if (j) {
+		if (j==1)
+			s[1] = 0;
+		out[k+0] = b64_chr[ (s[0]&255)>>2 ];
+		out[k+1] = b64_chr[ ((s[0]&0x03)<<4)+((s[1]&0xF0)>>4) ];
+		if (j==2)
+			out[k+2] = b64_chr[ ((s[1]&0x0F)<<2) ];
+		else
+			out[k+2] = '=';
+		out[k+3] = '=';
+		k+=4;
+	}
+
+	out[k] = '\0';
+
+	return k;
+}
+
+unsigned int b64_decode(const unsigned char* in, unsigned int in_len, unsigned char* out) {
+
+	unsigned int i=0, j=0, k=0, s[4];
+
+	for (i=0;i<in_len;i++) {
+		s[j++]=b64_int(*(in+i));
+		if (j==4) {
+			out[k+0] = ((s[0]&255)<<2)+((s[1]&0x30)>>4);
+			if (s[2]!=64) {
+				out[k+1] = ((s[1]&0x0F)<<4)+((s[2]&0x3C)>>2);
+				if ((s[3]!=64)) {
+					out[k+2] = ((s[2]&0x03)<<6)+(s[3]); k+=3;
+				} else {
+					k+=2;
+				}
+			} else {
+				k+=1;
+			}
+			j=0;
+		}
+	}
+
+	return k;
+}
+
 
 s_PIDchan PIDchannels[MAXPID+1]={0};
 
@@ -549,6 +655,168 @@ int parseany( char *tp, MMFLOAT **a1float, int64_t **a1int, unsigned char ** a1s
 	} else error("Syntax");
 	return *length;
 }
+unsigned char * parseAES(char *p, int ivadd, uint8_t *keyx, uint8_t *ivx, int64_t **outint, unsigned char **outstr, MMFLOAT **outfloat, int *card2){
+	int64_t *a1int=NULL, *a2int=NULL, *a3int=NULL, *a4int=NULL;
+	unsigned char *a1str=NULL, *a2str=NULL,*a3str=NULL,*a4str=NULL;
+	MMFLOAT *a1float=NULL, *a2float=NULL, *a3float=NULL, *a4float=NULL;
+	int card1, card3;
+	getargs(&p,7,",");
+	if(ivx==NULL){
+		if(argc!=5)error("Syntax");
+	} else {
+		if(argc<5)error("Syntax");
+	}
+	*outstr=NULL;
+	*outint=NULL;
+	int length=0;
+	card1= parseany(argv[0], &a1float, &a1int, &a1str, &length, false);
+	if(card1!=16)error("Key must be 16 elements long");
+	length=0;
+	*card2= parseany(argv[2], &a2float, &a2int, &a2str, &length, false);
+	if(*card2 % 16)error("input must be multiple of 16 elements long");
+//	if(card2 >256)error("input must be <= 256 elements long");
+	unsigned char *inx=(unsigned char *)GetTempMemory(*card2+16);
+	length=0;
+	card3= parseany(argv[4], &a3float, &a3int, &a3str, &length, false);
+	if(card3!=*card2 + ivadd && a3str==NULL)error("Array size mismatch");
+	if(argc==7){
+		length=0;
+		card1= parseany(argv[6], &a4float, &a4int, &a4str, &length, false);
+		if(card1!=16)error("Initialisation vector must be 16 elements long");
+		if(a4int!=NULL){
+			for(int i=0;i<16;i++){
+				if(a4int[i]<0 || a4int[i]>255)error("Key number out of bounds 0-255");
+				ivx[i]=a4int[i];
+			}
+		} else if (a4float!=NULL){
+			for(int i=0;i<16;i++){
+				if(a4float[i]<0 || a4float[i]>255)error("Key number out of bounds 0-255");
+				ivx[i]=a4float[i];
+			}
+		} else if(a4str!=NULL){
+			for(int i=0;i<16;i++){
+				ivx[i]=a4str[i+1];
+			}
+		}
+	}
+
+	if(a1int!=NULL){
+		for(int i=0;i<16;i++){
+			if(a1int[i]<0 || a1int[i]>255)error("Key number out of bounds 0-255");
+			keyx[i]=a1int[i];
+		}
+	} else if (a1float!=NULL){
+		for(int i=0;i<16;i++){
+			if(a1float[i]<0 || a1float[i]>255)error("Key number out of bounds 0-255");
+			keyx[i]=a1float[i];
+		}
+	} else if(a1str!=NULL){
+		for(int i=0;i<16;i++){
+			keyx[i]=a1str[i+1];
+		}
+	}
+	if(a2int!=NULL){
+		for(int i=0;i<*card2;i++){
+			if(a2int[i]<0 || a2int[i]>255)error("input number out of bounds 0-255");
+			inx[i]=a2int[i];
+		}
+	} else if (a2float!=NULL){
+		for(int i=0;i<*card2;i++){
+			if(a2float[i]<0 || a2float[i]>255)error("input number out of bounds 0-255");
+			inx[i]=a2float[i];
+		}
+	} else if(a2str!=NULL){
+		for(int i=0;i<*card2;i++){
+			inx[i]=a2str[i+1];
+		}
+	}
+	if(a3int!=NULL){
+		*outint=a3int;
+	} else if (a3float!=NULL){
+		*outfloat=a3float;
+	} else if(a3str!=NULL){
+		*outstr=a3str;
+	}
+	return inx;
+}
+unsigned char * parseB64(char *p,int64_t **outint, unsigned char **outstr, MMFLOAT **outfloat, int *card1, int *card2){
+	int64_t *a1int=NULL, *a3int=NULL;
+	unsigned char *a1str=NULL,*a3str=NULL;
+	MMFLOAT *a1float=NULL, *a3float=NULL;
+	getargs(&p,3,",");
+	if(argc!=3)error("Syntax");
+	*outstr=NULL;
+	*outint=NULL;
+	int length=0;
+	*card1= parseany(argv[0], &a1float, &a1int, &a1str, &length, false);
+	length=0;
+	*card2= parseany(argv[2], &a3float, &a3int, &a3str, &length, false);
+	unsigned char *keyx=GetTempMemory(b64e_size(*card1)+1);
+	if(a1int!=NULL){
+		for(int i=0;i<*card1;i++){
+			if(a1int[i]<0 || a1int[i]>255)error("Key number out of bounds 0-255");
+			keyx[i]=a1int[i];
+		}
+	} else if (a1float!=NULL){
+		for(int i=0;i<*card1;i++){
+			if(a1float[i]<0 || a1float[i]>255)error("Key number out of bounds 0-255");
+			keyx[i]=a1float[i];
+		}
+	} else if(a1str!=NULL){
+		for(int i=0;i<*card1;i++){
+			keyx[i]=a1str[i+1];
+		}
+	}
+	if(a3int!=NULL){
+		*outint=a3int;
+	} else if (a3float!=NULL){
+		*outfloat=a3float;
+	} else if(a3str!=NULL){
+		*outstr=a3str;
+	}
+	return keyx;
+}
+void returnAES(int64_t *outint, MMFLOAT *outflt, uint8_t *outstr, uint8_t *inx, uint8_t *iv, int card){
+	if(outint!=NULL){
+		if(iv){
+			for(int i=0;i<16;i++){
+				outint[i]=iv[i];
+			}
+			for(int i=16;i<card+16;i++){
+				outint[i]=inx[i-16];
+			}
+		}  else {
+			for(int i=0;i<card;i++){
+				outint[i]=inx[i];
+			}
+		}
+	} else if(outflt!=NULL){
+		if(iv){
+			for(int i=0;i<16;i++){
+				outflt[i]=iv[i];
+			}
+			for(int i=16;i<card+16;i++){
+				outflt[i]=inx[i-16];
+			}
+		}  else {
+			for(int i=0;i<card;i++){
+				outflt[i]=inx[i];
+			}
+		}
+	} else if(outstr!=NULL){
+		if(iv){
+			if(card+16>=256)error("Too many elements for string output");
+			memcpy(&outstr[1],iv,16);
+			memcpy(&outstr[17],inx,card);
+			*outstr=card+16;
+		} else {
+			if(card>=256)error("Too many elements for string output");
+			memcpy(&outstr[1],inx,card);
+			*outstr=card;
+		}
+	}
+}
+
 
 MMFLOAT farr2d(MMFLOAT *arr,int d1, int a, int b){
 	arr+=d1*b+a;
@@ -617,6 +885,12 @@ MMFLOAT PIDController_Update(PIDController *pid, MMFLOAT setpoint, MMFLOAT measu
 	/* Return controller output */
     return pid->out;
 
+}
+
+uint8_t getrnd(void){
+	uint32_t aRandom32bit;
+	HAL_RNG_GenerateRandomNumber(&hrng, &aRandom32bit);
+	return aRandom32bit & 0xFF;
 }
 
 void cmd_math(void){
@@ -1826,6 +2100,67 @@ void cmd_math(void){
 		}
 #endif
 	} else {
+		tp = checkstring(cmdline,"AES128");
+		if(tp) {
+			struct AES_ctx ctx;
+ 			int64_t *outint=NULL;
+			unsigned char *outstr=NULL;
+			MMFLOAT *outflt=NULL;
+			unsigned char keyx[16];
+			char * p;
+			int card;
+//unsigned char * parseAES(uint8_t *p, int ivadd, uint8_t *keyx, uint8_t *ivx, int64_t **outint, unsigned char **outstr, MMFLOAT **outfloat, int *card2){
+			if((p=checkstring(tp, "ENCRYPT CBC"))){
+				uint8_t iv[16];
+				for(int i=0;i<16;i++)iv[i]=getrnd();
+				uint8_t *inx= parseAES(p, 16, &keyx[0], &iv[0], &outint, &outstr, &outflt, &card);
+				AES_init_ctx_iv(&ctx, keyx, iv);
+				AES_CBC_encrypt_buffer(&ctx, inx, card);
+				returnAES(outint, outflt, outstr, inx, iv, card);
+				return;
+			} else if((p=checkstring(tp, "DECRYPT CBC"))){
+//   				uint8_t iv[16]16  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
+				uint8_t *inx = parseAES(p, -16, &keyx[0], NULL, &outint, &outstr, &outflt, &card);
+				AES_init_ctx_iv(&ctx, keyx, inx);
+				AES_CBC_decrypt_buffer(&ctx, &inx[16], card-16);
+				returnAES(outint, outflt, outstr, &inx[16], NULL, card-16);
+				return;
+			} else if((p=checkstring(tp, "ENCRYPT ECB"))){
+				struct AES_ctx ctxcopy;
+				uint8_t *inx = parseAES(p, 0, &keyx[0], NULL, &outint, &outstr, &outflt, &card);
+				AES_init_ctx(&ctxcopy, keyx);
+				for(int i=0;i<card;i+=16){
+					memcpy(&ctx,&ctxcopy,sizeof(ctx));
+					AES_ECB_encrypt(&ctx, &inx[i]);
+				}
+				returnAES(outint, outflt, outstr, inx, NULL, card);
+				return;
+			} else if((p=checkstring(tp, "DECRYPT ECB"))){
+				struct AES_ctx ctxcopy;
+				uint8_t *inx = parseAES(p, 0, &keyx[0], NULL, &outint, &outstr, &outflt, &card);
+				AES_init_ctx(&ctxcopy, keyx);
+				for(int i=0;i<card;i+=16){
+					memcpy(&ctx,&ctxcopy,sizeof(ctx));
+					AES_ECB_decrypt(&ctx, &inx[i]);
+				}
+				returnAES(outint, outflt, outstr, inx, NULL, card);
+				return;
+			} else if((p=checkstring(tp, "ENCRYPT CTR"))){
+				uint8_t iv[16];
+				for(int i=0;i<16;i++)iv[i]=getrnd();
+				uint8_t *inx= parseAES(p, 16, &keyx[0], &iv[0], &outint, &outstr, &outflt, &card);
+				AES_init_ctx_iv(&ctx, keyx, iv);
+				AES_CTR_xcrypt_buffer(&ctx, inx, card);
+				returnAES(outint, outflt, outstr, inx, iv, card);
+				return;
+			} else if((p=checkstring(tp, "DECRYPT CTR"))){
+				uint8_t *inx = parseAES(p, -16, &keyx[0], NULL, &outint, &outstr, &outflt, &card);
+				AES_init_ctx_iv(&ctx, keyx, inx);
+				AES_CTR_xcrypt_buffer(&ctx, &inx[16], card-16);
+				returnAES(outint, outflt, outstr, &inx[16], NULL, card-16);
+				return;
+			} else error("Syntax");
+		}
 		tp = checkstring(cmdline, "PID");
 		if(tp) {
 		    char * pi;
@@ -2589,264 +2924,7 @@ void fun_math(void){
 			return;
 		}
 
-#ifdef PREPARSE
-		       tp = checkstring(ep, "CRC8");
-				if(tp) {
-				    void *ptr1 = NULL;
-				    //int i,j;
-				    int i;
-				    MMFLOAT *a1float=NULL;
-				    int64_t *a1int=NULL;
-					getargs(&tp,13,",");
-					if(argc<1)error("Syntax");
-					uint8_t polynome=CRC8_DEFAULT_POLYNOME;
-					uint8_t startmask=0;
-					uint8_t endmask=0;
-					uint8_t reverseIn=false;
-					uint8_t reverseOut=false;
-					unsigned char *a1str=NULL;
-					int arraylength=0;
-					int length=0;
-					if(argc>1 && *argv[2])length=getint(argv[2],1,65535);
-					ptr1 = findvar(argv[0], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-					if(vartbl[VarIndex].type & T_NBR) {
-						if(vartbl[VarIndex].dims[1] != 0) error("Invalid variable");
-						if(vartbl[VarIndex].dims[0] <= 0) {		// Not an array
-							error("Argument 1 must be a numerical array");
-						}
-						arraylength=vartbl[VarIndex].dims[0] - OptionBase + 1;
-						if(length==0)length=arraylength;
-						if(length>arraylength)error("Array size");
-						a1float = (MMFLOAT *)ptr1;
-						if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-					} else if(ptr1 && vartbl[VarIndex].type & T_INT) {
-						if(vartbl[VarIndex].dims[1] != 0) error("Invalid variable");
-						if(vartbl[VarIndex].dims[0] <= 0) {		// Not an array
-							error("Argument 1 must be a numerical array");
-						}
-						arraylength=vartbl[VarIndex].dims[0] - OptionBase + 1;
-						if(length==0)length=arraylength;
-						if(length>arraylength)error("Array size");
-						a1int = (int64_t *)ptr1;
-						if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-					} else if(ptr1 && vartbl[VarIndex].type & T_STR) {
-						a1str=(unsigned char *)ptr1;
-						if(length==0)length=*a1str;
-						if(*a1str<length)error("String size");
-					} else error("Syntax");
-					uint8_t *array=GetTempMemory(length);
-					if(argc>3 && *argv[4])polynome=getint(argv[4],0,255);
-					if(argc>5 && *argv[6])startmask=getint(argv[6],0,255);
-					if(argc>7 && *argv[8])endmask=getint(argv[8],0,255);
-					if(argc>9 && *argv[10])reverseIn=getint(argv[10],0,1);
-					if(argc==13 && *argv[12])reverseOut=getint(argv[10],0,1);
-					for(i=0;i<length;i++){
-						if(a1float){
-							if(a1float[i]>255)error("Variable > 255");
-							else array[i]=(uint8_t)a1float[i];
-						} else if(a1int){
-							if(a1int[i]>255)error("Variable > 255");
-							else array[i]=(uint8_t)a1int[i];
-						} else 	memcpy(array,&a1str[1],length);
-					}
-					iret=crc8(array, length, polynome, startmask, endmask, reverseIn, reverseOut);
-					targ=T_INT;
-					return;
-				}
 
-				tp = checkstring(ep, "CRC12");
-				if(tp) {
-				    void *ptr1 = NULL;
-				    //int i,j;
-				    int i;
-				    MMFLOAT *a1float=NULL;
-				    int64_t *a1int=NULL;
-					getargs(&tp,13,",");
-					if(argc<1)error("Syntax");
-					uint16_t polynome=CRC12_DEFAULT_POLYNOME;
-					uint16_t startmask=0;
-					uint16_t endmask=0;
-					uint8_t reverseIn=false;
-					uint8_t reverseOut=false;
-					unsigned char *a1str=NULL;
-					int arraylength=0;
-					int length=0;
-					if(argc>1 && *argv[2])length=getint(argv[2],1,65535);
-					ptr1 = findvar(argv[0], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-					if(vartbl[VarIndex].type & T_NBR) {
-						if(vartbl[VarIndex].dims[1] != 0) error("Invalid variable");
-						if(vartbl[VarIndex].dims[0] <= 0) {		// Not an array
-							error("Argument 1 must be a numerical array");
-						}
-						arraylength=vartbl[VarIndex].dims[0] - OptionBase + 1;
-						if(length==0)length=arraylength;
-						if(length>arraylength)error("Array size");
-						a1float = (MMFLOAT *)ptr1;
-						if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-					} else if(ptr1 && vartbl[VarIndex].type & T_INT) {
-						if(vartbl[VarIndex].dims[1] != 0) error("Invalid variable");
-						if(vartbl[VarIndex].dims[0] <= 0) {		// Not an array
-							error("Argument 1 must be a numerical array");
-						}
-						arraylength=vartbl[VarIndex].dims[0] - OptionBase + 1;
-						if(length==0)length=arraylength;
-						if(length>arraylength)error("Array size");
-						a1int = (int64_t *)ptr1;
-						if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-					} else if(ptr1 && vartbl[VarIndex].type & T_STR) {
-						a1str=(unsigned char *)ptr1;
-						if(length==0)length=*a1str;
-						if(*a1str<length)error("String size");
-					} else error("Syntax");
-					uint8_t *array=GetTempMemory(length);
-					if(argc>3 && *argv[4])polynome=getint(argv[4],0,4095);
-					if(argc>5 && *argv[6])startmask=getint(argv[6],0,4095);
-					if(argc>7 && *argv[8])endmask=getint(argv[8],0,4095);
-					if(argc>9 && *argv[10])reverseIn=getint(argv[10],0,1);
-					if(argc==13 && *argv[12])reverseOut=getint(argv[10],0,1);
-					for(i=0;i<length;i++){
-						if(a1float){
-							if(a1float[i]>255)error("Variable > 255");
-							else array[i]=(uint8_t)a1float[i];
-						} else if(a1int){
-							if(a1int[i]>255)error("Variable > 255");
-							else array[i]=(uint8_t)a1int[i];
-						} else 	memcpy(array,&a1str[1],length);
-					}
-					iret=crc12(array, length, polynome, startmask, endmask, reverseIn, reverseOut);
-
-					targ=T_INT;
-					return;
-				}
-
-				tp = checkstring(ep, "CRC16");
-				if(tp) {
-				    void *ptr1 = NULL;
-				    //int i,j;
-				    int i;
-				    MMFLOAT *a1float=NULL;
-				    int64_t *a1int=NULL;
-					getargs(&tp,13,",");
-					if(argc<1)error("Syntax");
-					uint16_t polynome=CRC16_DEFAULT_POLYNOME;
-					uint16_t startmask=0;
-					uint16_t endmask=0;
-					uint8_t reverseIn=false;
-					uint8_t reverseOut=false;
-					unsigned char *a1str=NULL;
-					int arraylength=0;
-					int length=0;
-					if(argc>1 && *argv[2])length=getint(argv[2],1,65535);
-					ptr1 = findvar(argv[0], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-					if(vartbl[VarIndex].type & T_NBR) {
-						if(vartbl[VarIndex].dims[1] != 0) error("Invalid variable");
-						if(vartbl[VarIndex].dims[0] <= 0) {		// Not an array
-							error("Argument 1 must be a numerical array");
-						}
-						arraylength=vartbl[VarIndex].dims[0] - OptionBase + 1;
-						if(length==0)length=arraylength;
-						if(length>arraylength)error("Array size");
-						a1float = (MMFLOAT *)ptr1;
-						if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-					} else if(ptr1 && vartbl[VarIndex].type & T_INT) {
-						if(vartbl[VarIndex].dims[1] != 0) error("Invalid variable");
-						if(vartbl[VarIndex].dims[0] <= 0) {		// Not an array
-							error("Argument 1 must be a numerical array");
-						}
-						arraylength=vartbl[VarIndex].dims[0] - OptionBase + 1;
-						if(length==0)length=arraylength;
-						if(length>arraylength)error("Array size");
-						a1int = (int64_t *)ptr1;
-						if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-					} else if(ptr1 && vartbl[VarIndex].type & T_STR) {
-						a1str=( unsigned char *)ptr1;
-						if(length==0)length=*a1str;
-						if(*a1str<length)error("String size");
-					} else error("Syntax");
-					uint8_t *array=GetTempMemory(length);
-					if(argc>3 && *argv[4])polynome=getint(argv[4],0,65535);
-					if(argc>5 && *argv[6])startmask=getint(argv[6],0,65535);
-					if(argc>7 && *argv[8])endmask=getint(argv[8],0,65535);
-					if(argc>9 && *argv[10])reverseIn=getint(argv[10],0,1);
-					if(argc==13 && *argv[12])reverseOut=getint(argv[10],0,1);
-					for(i=0;i<length;i++){
-						if(a1float){
-							if(a1float[i]>255)error("Variable > 255");
-							else array[i]=(uint8_t)a1float[i];
-						} else if(a1int){
-							if(a1int[i]>255)error("Variable > 255");
-							else array[i]=(uint8_t)a1int[i];
-						} else 	memcpy(array,&a1str[1],length);
-					}
-					iret=crc16(array, length, polynome, startmask, endmask, reverseIn, reverseOut);
-					targ=T_INT;
-					return;
-				}
-
-				tp = checkstring(ep, "CRC32");
-				if(tp) {
-				    void *ptr1 = NULL;
-				    //int i,j;
-				    int i;
-				    MMFLOAT *a1float=NULL;
-				    int64_t *a1int=NULL;
-					getargs(&tp,13,",");
-					if(argc<1)error("Syntax");
-					uint32_t polynome=CRC32_DEFAULT_POLYNOME;
-					uint32_t startmask=0;
-					uint32_t endmask=0;
-					uint8_t reverseIn=false;
-					uint8_t reverseOut=false;
-					unsigned char *a1str=NULL;
-					int arraylength=0;
-					int length=0;
-					if(argc>1 && *argv[2])length=getint(argv[2],1,65535);
-					ptr1 = findvar(argv[0], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-					if(vartbl[VarIndex].type & T_NBR) {
-						if(vartbl[VarIndex].dims[1] != 0) error("Invalid variable");
-						if(vartbl[VarIndex].dims[0] <= 0) {		// Not an array
-							error("Argument 1 must be a numerical array");
-						}
-						arraylength=vartbl[VarIndex].dims[0] - OptionBase + 1;
-						if(length==0)length=arraylength;
-						if(length>arraylength)error("Array size");
-						a1float = (MMFLOAT *)ptr1;
-						if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-					} else if(ptr1 && vartbl[VarIndex].type & T_INT) {
-						if(vartbl[VarIndex].dims[1] != 0) error("Invalid variable");
-						if(vartbl[VarIndex].dims[0] <= 0) {		// Not an array
-							error("Argument 1 must be a numerical array");
-						}
-						arraylength=vartbl[VarIndex].dims[0] - OptionBase + 1;
-						if(length==0)length=arraylength;
-						if(length>arraylength)error("Array size");
-						a1int = (int64_t *)ptr1;
-						if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-					} else if(ptr1 && vartbl[VarIndex].type & T_STR) {
-						a1str=(unsigned char *)ptr1;
-						if(length==0)length=*a1str;
-						if(*a1str<length)error("String size");
-					} else error("Syntax");
-					uint8_t *array=GetTempMemory(length);
-					if(argc>3 && *argv[4])polynome=getint(argv[4],0,0xFFFFFFFF);
-					if(argc>5 && *argv[6])startmask=getint(argv[6],0,0xFFFFFFFF);
-					if(argc>7 && *argv[8])endmask=getint(argv[8],0,0xFFFFFFFF);
-					if(argc>9 && *argv[10])reverseIn=getint(argv[10],0,1);
-					if(argc==13 && *argv[12])reverseOut=getint(argv[10],0,1);
-					for(i=0;i<length;i++){
-						if(a1float){
-							if(a1float[i]>255)error("Variable > 255");
-							else array[i]=(uint8_t)a1float[i];
-						} else if(a1int){
-							if(a1int[i]>255)error("Variable > 255");
-							else array[i]=(uint8_t)a1int[i];
-						} else 	memcpy(array,&a1str[1],length);
-					}
-					iret=crc32(array, length, polynome, startmask, endmask, reverseIn, reverseOut);
-					targ=T_INT;
-					return;
-				}
-#endif
 
 		tp = checkstring(ep, "COSH");
 		if(tp) {
@@ -2966,85 +3044,7 @@ void fun_math(void){
 			fret=axb/sqrt(a2*b2);
 			return;
 		}
-#ifdef PREPARSE
-		tp = checkstring(ep, "CORREL");
-		if(tp) {
-		    void *ptr1 = NULL;
-		    void *ptr2 = NULL;
-		    int i,j,card1=1, card2=1;
-		    MMFLOAT *a1float=NULL, *a2float=NULL, mean1=0, mean2=0;
-		    MMFLOAT *a3float=NULL, *a4float=NULL;
-		    MMFLOAT axb=0, a2=0, b2=0;
-		    int64_t *a1int=NULL, *a2int=NULL;
-		    getargs(&tp, 3,",");
-		    if(!(argc == 3)) error("Argument count");
-		    ptr1 = findvar(argv[0], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-			if(vartbl[VarIndex].type & T_NBR) {
-				card1=1;
-				for(i=0;i<MAXDIM;i++){
-		    		j=(vartbl[VarIndex].dims[i] - OptionBase+1);
-		    		if(j)card1 *= j;
-				}
-				a1float = (MMFLOAT *)ptr1;
-				if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-		    } else if(vartbl[VarIndex].type & T_INT) {
-		    	card1=1;
-		    	for(i=0;i<MAXDIM;i++){
-		    		j=(vartbl[VarIndex].dims[i] - OptionBase+1);
-		    		if(j)card1 *= j;
-		    	}
-		        a1int = (int64_t *)ptr1;
-				if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-		    } else error("Argument 1 must be numerical");
-		    ptr2 = findvar(argv[2], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-			if(vartbl[VarIndex].type & T_NBR) {
-				card2=1;
-				for(i=0;i<MAXDIM;i++){
-		    		j=(vartbl[VarIndex].dims[i] - OptionBase+1);
-		    		if(j)card2 *= j;
-				}
-				a2float = (MMFLOAT *)ptr2;
-				if((uint32_t)ptr2!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-		    } else if(vartbl[VarIndex].type & T_INT) {
-		    	card2=1;
-		    	for(i=0;i<MAXDIM;i++){
-		    		j=(vartbl[VarIndex].dims[i] - OptionBase+1);
-		    		if(j)card2 *= j;
-		    	}
-		        a2int = (int64_t *)ptr2;
-				if((uint32_t)ptr2!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-		    } else error("Argument 2 must be numerical");
-			if(card1!=card2)error("Array size mismatch");
-			a3float=GetTempMemory(card1*sizeof(MMFLOAT));
-			a4float=GetTempMemory(card1*sizeof(MMFLOAT));
-			if(a1float!=NULL){
-				for(i=0; i< card1;i++)a3float[i] = (*a1float++);
-			} else {
-				for(i=0; i< card1;i++)a3float[i] = (MMFLOAT)(*a1int++);
-			}
-			if(a2float!=NULL){
-				for(i=0; i< card1;i++)a4float[i] = (*a2float++);
-			} else {
-				for(i=0; i< card1;i++)a4float[i] = (MMFLOAT)(*a2int++);
-			}
-			for(i=0;i<card1;i++){
-				mean1+=a3float[i];
-				mean2+=a4float[i];
-			}
-			mean1/=card1;
-			mean2/=card1;
-			for(i=0;i<card1;i++){
-				a3float[i]-=mean1;
-				a2+=(a3float[i]*a3float[i]);
-				a4float[i]-=mean2;
-				b2+=(a4float[i]*a4float[i]);
-				axb+=(a3float[i]*a4float[i]);
-			}
-			targ=T_NBR;
-			fret=axb/sqrt(a2*b2);
-			return;
-		}
-#endif
+
 		tp = (checkstring(ep, "CHI_P"));
 		tp1 = (checkstring(ep,"CHI"));
 		if(tp || tp1) {
@@ -3212,45 +3212,7 @@ void fun_math(void){
 			targ = T_NBR;
 			return;
 		}
-#ifdef PREPARSE
-		tp = checkstring(ep, "DOTPRODUCT");
-		if(tp) {
-			int i;
-			void *ptr1 = NULL,*ptr2 = NULL;
-			int numcols=0;
-			MMFLOAT *a1float=NULL, *a2float=NULL;
-			// need two arrays with same cardinality
-			getargs(&tp, 3,",");
-			if(!(argc == 3)) error("Argument count");
-			ptr1 = findvar(argv[0], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-			if(vartbl[VarIndex].type & T_NBR) {
-				if(vartbl[VarIndex].dims[1] != 0) error("Invalid variable");
-				if(vartbl[VarIndex].dims[0] <= 0) {		// Not an array
-					error("Argument 1 must be a floating point array");
-				}
-				numcols=vartbl[VarIndex].dims[0] - OptionBase;
-				a1float = (MMFLOAT *)ptr1;
-				if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-			} else error("Argument 1 must be a floating point array");
-			ptr2 = findvar(argv[2], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-			if(vartbl[VarIndex].type & T_NBR) {
-				if(vartbl[VarIndex].dims[1] != 0) error("Invalid variable");
-				if(vartbl[VarIndex].dims[0] <= 0) {		// Not an array
-					error("Argument 2 must be a floating point array");
-				}
-				if((vartbl[VarIndex].dims[0] - OptionBase) != numcols)error("Array size mismatch");
-				a2float = (MMFLOAT *)ptr2;
-				if((uint32_t)ptr2!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-			} else error("Argument 2 must be a floating point array");
-			numcols++;
-			fret=0;
-			for(i=0;i<numcols;i++){
-				fret = fret + ((*a1float++) * (*a2float++));
-			}
-			targ = T_NBR;
-			return;
-		}
-#endif
+
 	} else if(toupper(*ep)=='L') {
 		tp = checkstring(ep, "LOG10");
 		if(tp) {
@@ -3423,271 +3385,7 @@ void fun_math(void){
 			return;
 		}
 
-#ifdef PREPARSE
-	} else if(toupper(*ep)=='M') {
-		tp = checkstring(ep, "M_DETERMINANT");
-		if(tp){
-			void *ptr1 = NULL;
-			int i, j, n, numcols=0, numrows=0;
-			MMFLOAT *a1float=NULL;
-			getargs(&tp, 1,",");
-			if(!(argc == 1)) error("Argument count");
-			ptr1 = findvar(argv[0], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-			if(vartbl[VarIndex].type & T_NBR) {
-				if(vartbl[VarIndex].dims[2] != 0) error("Invalid variable");
-				if(vartbl[VarIndex].dims[1] <= 0) {		// Not an array
-					error("Argument 1 must be a numerical 2D array");
-				}
-				if(vartbl[VarIndex].dims[0] <= 0) {		// Not an array
-					error("Argument 1 must be a numerical 2D array");
-				}
-				numcols=vartbl[VarIndex].dims[0] - OptionBase;
-				numrows=vartbl[VarIndex].dims[1] - OptionBase;
-				a1float = (MMFLOAT *)ptr1;
-				if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-			} else	error("Argument 1 must be a numerical 2D array");
-			if(numcols!=numrows)error("Array must be square");
-			n=numrows+1;
-			MMFLOAT **matrix=alloc2df(n,n);
-			for(i=0;i<n;i++){ //load the matrix
-				for(j=0;j<n;j++){
-					matrix[j][i]=*a1float++;
-				}
-			}
-			fret=determinant(matrix,n);
-			dealloc2df(matrix,numcols,numrows);
-			targ=T_NBR;
 
-			return;
-		}
-
-
-		tp = checkstring(ep, "MAX");
-		if(tp) {
-			void *ptr1 = NULL;
-			int i,j,card1=1;
-			MMFLOAT *a1float=NULL, max=-3.0e+38;
-			int64_t *a1int=NULL;
-			long long int *temp=NULL;
-			getargs(&tp, 3,",");
-//			if(!(argc == 1)) error("Argument count");
-			ptr1 = findvar(argv[0], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-			if(vartbl[VarIndex].type & T_NBR) {
-				card1=1;
-				for(i=0;i<MAXDIM;i++){
-					j=(vartbl[VarIndex].dims[i] - OptionBase+1);
-					if(j)card1 *= j;
-				}
-				a1float = (MMFLOAT *)ptr1;
-				if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-			} else if(vartbl[VarIndex].type & T_INT) {
-				card1=1;
-				for(i=0;i<MAXDIM;i++){
-					j=(vartbl[VarIndex].dims[i] - OptionBase+1);
-					if(j)card1 *= j;
-				}
-				a1int = (int64_t *)ptr1;
-				if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-			} else error("Argument 1 must be numerical");
-			if(argc==3){
-				if(vartbl[VarIndex].dims[1] > 0) {		// Not an array
-					error("Argument 1 must be a 1D numerical array");
-				}
-				temp = findvar(argv[2], V_FIND);
-				if(!(vartbl[VarIndex].type & T_INT)) error("Invalid variable");
-			}
-
-			if(a1float!=NULL){
-				for(i=0; i< card1;i++){
-					if((*a1float)>max){
-						max=(*a1float);
-						if(temp!=NULL){
-							*temp=i+OptionBase;
-						}
-					}
-					a1float++;
-				}
-			} else {
-				for(i=0; i< card1;i++){
-					if(((MMFLOAT)(*a1int))>max){
-						max=(MMFLOAT)(*a1int);
-						if(temp!=NULL){
-							*temp=i+OptionBase;
-						}
-					}
-					a1int++;
-				}
-			}
-			targ=T_NBR;
-			fret=max;
-			return;
-		}
-		tp = checkstring(ep, "MIN");
-		if(tp) {
-			void *ptr1 = NULL;
-			int i,j,card1=1;
-			MMFLOAT *a1float=NULL, min=3.0e+38;
-			int64_t *a1int=NULL;
-			long long int *temp=NULL;
-			getargs(&tp, 3,",");
-//			if(!(argc == 1)) error("Argument count");
-			ptr1 = findvar(argv[0], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-			if(vartbl[VarIndex].type & T_NBR) {
-				card1=1;
-				for(i=0;i<MAXDIM;i++){
-					j=(vartbl[VarIndex].dims[i] - OptionBase+1);
-					if(j)card1 *= j;
-				}
-				a1float = (MMFLOAT *)ptr1;
-				if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-			} else if(vartbl[VarIndex].type & T_INT) {
-				card1=1;
-				for(i=0;i<MAXDIM;i++){
-					j=(vartbl[VarIndex].dims[i] - OptionBase+1);
-					if(j)card1 *= j;
-				}
-				a1int = (int64_t *)ptr1;
-				if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-			} else error("Argument 1 must be numerical");
-			if(argc==3){
-				if(vartbl[VarIndex].dims[1] > 0) {		// Not an array
-					error("Argument 1 must be a 1D numerical array");
-				}
-				temp = findvar(argv[2], V_FIND);
-				if(!(vartbl[VarIndex].type & T_INT)) error("Invalid variable");
-			}
-			if(a1float!=NULL){
-				for(i=0; i< card1;i++){
-					if((*a1float)<min){
-						min=(*a1float);
-						if(temp!=NULL){
-							*temp=i+OptionBase;
-						}
-					}
-					a1float++;
-				}
-			} else {
-				for(i=0; i< card1;i++){
-					if(((MMFLOAT)(*a1int))<min){
-						min=(MMFLOAT)(*a1int);
-						if(temp!=NULL){
-							*temp=i+OptionBase;
-						}
-					}
-					a1int++;
-				}
-			}
-			targ=T_NBR;
-			fret=min;
-			return;
-		}
-
-		tp = checkstring(ep, "MAGNITUDE");
-		if(tp) {
-			int i;
-			void *ptr1 = NULL;
-			int numcols=0;
-			MMFLOAT *a1float=NULL;
-			MMFLOAT mag=0.0;
-			getargs(&tp, 1,",");
-			if(!(argc == 1)) error("Argument count");
-			ptr1 = findvar(argv[0], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-			if(vartbl[VarIndex].type & T_NBR) {
-				if(vartbl[VarIndex].dims[1] != 0) error("Invalid variable");
-				if(vartbl[VarIndex].dims[0] <= 0) {		// Not an array
-					error("Argument 1 must be a floating point array");
-				}
-				numcols=vartbl[VarIndex].dims[0] - OptionBase;
-				a1float = (MMFLOAT *)ptr1;
-				if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-			} else error("Argument 1 must be a floating point array");
-			numcols++;
-			for(i=0;i<numcols;i++){
-				mag = mag + ((*a1float) * (*a1float));
-				a1float++;
-			}
-			fret=sqrt(mag);
-			targ = T_NBR;
-			return;
-		}
-
-		tp = checkstring(ep, "MEAN");
-		if(tp) {
-			void *ptr1 = NULL;
-			int i,j,card1=1;
-			MMFLOAT *a1float=NULL, mean=0;
-			int64_t *a1int=NULL;
-			getargs(&tp, 1,",");
-			if(!(argc == 1)) error("Argument count");
-			ptr1 = findvar(argv[0], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-			if(vartbl[VarIndex].type & T_NBR) {
-				card1=1;
-				for(i=0;i<MAXDIM;i++){
-					j=(vartbl[VarIndex].dims[i] - OptionBase+1);
-					if(j)card1 *= j;
-				}
-				a1float = (MMFLOAT *)ptr1;
-				if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-			} else if(vartbl[VarIndex].type & T_INT) {
-				card1=1;
-				for(i=0;i<MAXDIM;i++){
-					j=(vartbl[VarIndex].dims[i] - OptionBase+1);
-					if(j)card1 *= j;
-				}
-				a1int = (int64_t *)ptr1;
-				if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-			} else error("Argument 1 must be numerical");
-			if(a1float!=NULL){
-				for(i=0; i< card1;i++)mean+= (*a1float++);
-			} else {
-				for(i=0; i< card1;i++)mean+= (MMFLOAT)(*a1int++);
-			}
-			targ=T_NBR;
-			fret=mean/(MMFLOAT)card1;
-			return;
-		}
-
-		tp = checkstring(ep, "MEDIAN");
-		if(tp) {
-			void *ptr2 = NULL;
-			int i,j,card1, card2=1;
-			MMFLOAT *a1float=NULL, *a2float=NULL;
-			int64_t *a2int=NULL;
-			getargs(&tp, 1,",");
-			if(!(argc == 1)) error("Argument count");
-			ptr2 = findvar(argv[0], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-			if(vartbl[VarIndex].type & T_NBR) {
-				card2=1;
-				for(i=0;i<MAXDIM;i++){
-					j=(vartbl[VarIndex].dims[i] - OptionBase+1);
-					if(j)card2 *= j;
-				}
-				a2float = (MMFLOAT *)ptr2;
-				if((uint32_t)ptr2!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-			} else if(vartbl[VarIndex].type & T_INT) {
-				card2=1;
-				for(i=0;i<MAXDIM;i++){
-					j=(vartbl[VarIndex].dims[i] - OptionBase+1);
-					if(j)card2 *= j;
-				}
-				a2int = (int64_t *)ptr2;
-				if((uint32_t)ptr2!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-			} else error("Argument 1 must be numerical");
-			card1=card2;
-			card2=(card2-1)/2;
-			a1float=GetTempMemory(card1*sizeof(MMFLOAT));
-			if(a2float!=NULL){
-				for(i=0; i< card1;i++)a1float[i] = (*a2float++);
-			} else {
-				for(i=0; i< card1;i++)a1float[i] = (MMFLOAT)(*a2int++);
-			}
-			floatshellsort(a1float,  card1);
-			targ=T_NBR;
-			if(card1 & 1)fret=a1float[card2];
-			else fret=(a1float[card2]+a1float[card2+1])/2.0;
-			return;
-		}
-#endif
 	} else if(toupper(*ep)=='S') {
 
 		tp = checkstring(ep, "SINH");
@@ -3745,91 +3443,7 @@ void fun_math(void){
 			fret=sum;
 			return;
 		}
-#ifdef PREPARSE
-		tp = checkstring(ep, "SD");
-		if(tp) {
-			void *ptr1 = NULL;
-			int i,j,card1=1;
-			MMFLOAT *a2float=NULL, *a1float=NULL, mean=0, var=0, deviation;
-			int64_t *a2int=NULL, *a1int=NULL;
-			getargs(&tp, 1,",");
-			if(!(argc == 1)) error("Argument count");
-			ptr1 = findvar(argv[0], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-			if(vartbl[VarIndex].type & T_NBR) {
-				card1=1;
-				for(i=0;i<MAXDIM;i++){
-					j=(vartbl[VarIndex].dims[i] - OptionBase+1);
-					if(j)card1 *= j;
-				}
-				a1float = a2float = (MMFLOAT *)ptr1;
-				if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-			} else if(vartbl[VarIndex].type & T_INT) {
-				card1=1;
-				for(i=0;i<MAXDIM;i++){
-					j=(vartbl[VarIndex].dims[i] - OptionBase+1);
-					if(j)card1 *= j;
-				}
-				a1int = a2int = (int64_t *)ptr1;
-				if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-			} else error("Argument 1 must be numerical");
-			if(a2float!=NULL){
-				for(i=0; i< card1;i++)mean+= (*a2float++);
-			} else {
-				for(i=0; i< card1;i++)mean+= (MMFLOAT)(*a2int++);
-			}
-			mean=mean/(MMFLOAT)card1;
-			if(a1float!=NULL){
-				for(i=0; i< card1;i++){
-					deviation = (*a1float++) - mean;
-					var += deviation * deviation;
-				}
-			} else {
-				for(i=0; i< card1;i++){
-					deviation = (MMFLOAT)(*a1int++) - mean;
-					var += deviation * deviation;
-				}
-			}
-			targ=T_NBR;
-			fret=sqrt(var/(card1-1));
-			return;
-		}
 
-		tp = checkstring(ep, "SUM");
-		if(tp) {
-			void *ptr1 = NULL;
-			int i,j,card1=1;
-			MMFLOAT *a1float=NULL, sum=0;
-			int64_t *a1int=NULL;
-			getargs(&tp, 1,",");
-			if(!(argc == 1)) error("Argument count");
-			ptr1 = findvar(argv[0], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-			if(vartbl[VarIndex].type & T_NBR) {
-				card1=1;
-				for(i=0;i<MAXDIM;i++){
-					j=(vartbl[VarIndex].dims[i] - OptionBase+1);
-					if(j)card1 *= j;
-				}
-				a1float = (MMFLOAT *)ptr1;
-				if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-			} else if(vartbl[VarIndex].type & T_INT) {
-				card1=1;
-				for(i=0;i<MAXDIM;i++){
-					j=(vartbl[VarIndex].dims[i] - OptionBase+1);
-					if(j)card1 *= j;
-				}
-				a1int = (int64_t *)ptr1;
-				if((uint32_t)ptr1!=(uint32_t)vartbl[VarIndex].val.s)error("Syntax");
-			} else error("Argument 1 must be numerical");
-			if(a1float!=NULL){
-				for(i=0; i< card1;i++)sum+= (*a1float++);
-			} else {
-				for(i=0; i< card1;i++)sum+= (MMFLOAT)(*a1int++);
-			}
-			targ=T_NBR;
-			fret=sum;
-			return;
-		}
-#endif
 	} else if(toupper(*ep)=='T') {
 
 		tp = checkstring(ep, "TANH");
@@ -3840,6 +3454,36 @@ void fun_math(void){
 			targ=T_NBR;
 			return;
 		}
+	}else{
+	   tp = checkstring(ep, "BASE64");
+	   if(tp) {
+			int64_t *outint=NULL;
+		   unsigned char *outstr=NULL;
+		   MMFLOAT *outflt=NULL;
+		   char * p;
+		   int card, card2;
+		   if((p=checkstring(tp,"ENCODE"))){
+			  unsigned char *inx=parseB64(p, &outint, &outstr, &outflt, &card, &card2);
+			  if(!outstr && card2 < b64e_size(card)) error("Output array too small");
+			  if(outstr && b64e_size(card) > 255) error("Output exceeds string size");
+			  unsigned char *out =(unsigned char *)GetTempMemory(b64e_size(card+1));
+			  int size = b64_encode(inx, card, out);
+			  returnAES(outint, outflt, outstr, out, NULL, size);
+			  iret=size;
+			  targ=T_INT;
+			  return;
+		  } else if((p=checkstring(tp,"DECODE"))){
+			  unsigned char *inx=parseB64(p, &outint, &outstr, &outflt, &card, &card2);
+			  if(!outstr && card2 < b64d_size(card)) error("Output array too small");
+			  if(outstr && b64d_size(card) > 255) error("Output exceeds string size");
+			  unsigned char *out =(unsigned char *)GetTempMemory(b64e_size(card+1));
+			  int size = b64_decode(inx,card,out);
+			  returnAES(outint, outflt, outstr, out, NULL, size);
+			  iret=size;
+			  targ=T_INT;
+			  return;
+		  } else error("Syntax");
+	   }
 	}
 	error("Syntax");
 }
