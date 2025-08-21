@@ -45,7 +45,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 //#define DEBUGMODE
 
-#define VERSION     "5.08.00b0"
+#define VERSION     "5.08.00b1"
 #define MES_SIGNON  "ARMmiteH7 MMBasic Version " VERSION
 #define YEAR		"2011-2025"			    // and the year
 #define YEAR2       "2016-2025"
